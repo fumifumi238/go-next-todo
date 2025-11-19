@@ -1,8 +1,16 @@
-# goのバージョン指定
-FROM golang:1.25.4-alpine3.22
-# ディレクトリ作成
-RUN mkdir /go/src/app
-# 作業ディレクトリ変更
-WORKDIR /go/src/app
-# main.go実行
-CMD ["go", "run", "main.go"]
+FROM golang:1.25.4-alpine AS builder
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN ls -R /app
+RUN go build -v -o server ./cmd/api
+RUN ls -al /app  # 確認用
+
+FROM alpine:3.20
+WORKDIR /app
+COPY --from=builder /app/server .
+RUN ls -al /app  # 確認用
+
+RUN chmod +x server
+CMD ["./server"]

@@ -1,59 +1,49 @@
+version: '3.9'
 
 services:
-    frontend:
-        container_name: frontend
-        build: ./frontend
-        tty: true
-        ports:
-            - "3000:3000"
-        depends_on:
-            - backend
-        volumes:
-            - type: bind
-              source: ./frontend
-              target: /src/app
-            - type: volume
-              source: node_modules
-              target: /src/app/node_modules
-        command: "npm run dev"
-        networks:
-            - frontend_network
-    backend:
-        container_name: backend
-        build: ./backend
-        tty: true
-        ports:
-            - "8080:8080"
-        depends_on:
-            - db
-        volumes:
-            - type: bind
-              source: ./backend/app
-              target: /go/src/app
-        networks:
-            - frontend_network
-            - backend_network
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: go-backend
+    ports:
+      - "8080:8080"
+    environment:
+        DB_HOST: ${DB_HOST}
+        DB_PORT: ${DB_PORT}
+        DB_USER: ${DB_USER}
+        DB_PASS: ${DB_PASS}
+        DB_NAME: ${DB_NAME}
+    depends_on:
+      - db
+    # volumes:
+    #   - ./backend:/app
 
-    db:
-        container_name: db
-        build: ./db
-        tty: true
-        platform: linux/x86_64
-        ports:
-            - 3306:3306
-        env_file:
-            - ./db/.env
-        volumes:
-            - mysql_test_volume:/var/lib/db
-        networks:
-            - backend_network
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nextjs-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: "http://backend:8080"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
 
+
+  db:
+    image: mysql:8.4
+    container_name: mysql-db
+    env_file:
+      - .env
+    ports:
+      - "3306:3306"
+    volumes:
+      - db-data:/var/lib/mysql
 volumes:
-    mysql_test_volume:
-    node_modules:
-
-networks:
-    frontend_network:
-        external: true
-    backend_network:
-        external: true
+  db-data:

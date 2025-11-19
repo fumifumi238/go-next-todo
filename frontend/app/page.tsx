@@ -1,98 +1,32 @@
-"use client"; // 💡 App Routerでフック(useState, useEffect)を使うために必須
+// app/page.tsx
 
-import { useState, useEffect } from "react";
-import Head from "next/head";
+// 環境変数 NEXT_PUBLIC_API_URL を利用
+// サーバーコンポーネントで実行される場合は 'http://backend:8080' を使うのが確実
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
-// APIから返されるデータの型定義
-interface ApiResponse {
-  message: string;
-  service: string;
+async function getData() {
+  const res = await fetch(`${API_URL}/api/dbcheck`, {
+    // サーバーコンポーネントでのデータキャッシュ設定 (必要に応じて)
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch data: ${res.statusText}`);
+  }
+
+  // GinのハンドラーはJSONを返しているため、.json()でパース
+  return res.json();
 }
 
-// Next.jsの環境変数からAPIのベースURLを取得
-// docker-compose.ymlで NEXT_PUBLIC_API_URL=http://golang:8080 に設定されています
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
-
-const Home: React.FC = () => {
-  const [data, setData] = useState<ApiResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function fetchData() {
-      if (!API_BASE_URL) {
-        setError("API URL is not defined in environment variables.");
-        setLoading(false);
-        return;
-      }
-
-      try {
-        // Go APIのエンドポイントを呼び出す
-        const response = await fetch(`${API_BASE_URL}/api/hello`);
-
-        if (!response.ok) {
-          throw new Error(`API returned status ${response.status}`);
-        }
-
-        const result: ApiResponse = await response.json();
-        setData(result);
-      } catch (e: unknown) {
-        if (e instanceof Error) {
-          setError(
-            `Failed to fetch data: ${e.message}. Check if Go API is running.`
-          );
-        }
-
-        console.error("Fetch Error:", e);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
+export default async function Page() {
+  const data = await getData();
 
   return (
-    <div style={{ padding: "20px", fontFamily: "Arial, sans-serif" }}>
-      <Head>
-        <title>Next.js & Go Connection Test</title>
-      </Head>
-
-      <h1>Next.js 🤝 Golang 接続テスト</h1>
-
-      {loading && <p>Loading API response...</p>}
-
-      {error && (
-        <div style={{ color: "red", border: "1px solid red", padding: "10px" }}>
-          <h2>❌ Connection Error</h2>
-          <p>{error}</p>
-          <p>Target URL: {API_BASE_URL}/api/hello</p>
-          <p>💡 Make sure the Go API service is running correctly in Docker.</p>
-        </div>
-      )}
-
-      {data && (
-        <div
-          style={{
-            border: "1px solid green",
-            padding: "15px",
-            backgroundColor: "#e8ffe8",
-          }}>
-          <h2>✅ Successful Connection!</h2>
-          <p>
-            <strong>Response Source:</strong> {data.service}
-          </p>
-          <p>
-            <strong>Message:</strong> {data.message}
-          </p>
-          <p>
-            This confirms that the **Next.js (Vercel)** service successfully
-            communicated with the **Go API (Fargate)** service within the Docker
-            Compose network.
-          </p>
-        </div>
-      )}
+    <div>
+      <h1>CORS Test Page (Gin Backend)</h1>
+      <p>Backend Response:</p>
+      {/* 取得したJSONデータを表示 */}
+      <pre>{JSON.stringify(data, null, 2)}</pre>
     </div>
   );
-};
-
-export default Home;
+}

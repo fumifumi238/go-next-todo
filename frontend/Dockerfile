@@ -1,23 +1,26 @@
-# ベースイメージを指定
-FROM node:20-alpine
+# ---- Build Stage ----
+FROM node:20-alpine AS builder
 
-# 作業ディレクトリを設定
 WORKDIR /app
 
-# キャッシュ利用で効率化するために別でコピー
-COPY ./frontend/package*.json ./
-
-# 依存関係をインストール
+COPY package*.json ./
 RUN npm install
 
-# ソースコードをコピー
-COPY ./frontend/ ./app
+COPY . .
 
-# アプリケーションをビルド
+# Next.js 本番ビルド
 RUN npm run build
 
-# ポート番号を指定
-EXPOSE 3000
+# ---- Run Stage ----
+FROM node:20-alpine
 
-# アプリケーションを起動
+WORKDIR /app
+
+# 本番実行に必要なファイルのみコピー
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/node_modules ./node_modules
+
+EXPOSE 3000
 CMD ["npm", "start"]

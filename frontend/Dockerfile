@@ -8,7 +8,7 @@ RUN npm install
 
 COPY . .
 
-# Next.js 本番ビルド
+
 RUN npm run build
 
 # ---- Run Stage ----

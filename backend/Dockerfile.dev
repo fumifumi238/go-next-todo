@@ -1,0 +1,16 @@
+FROM golang:1.25.4-alpine
+
+WORKDIR /app
+
+# 依存関係をダウンロード
+COPY go.mod go.sum ./
+RUN go mod download
+
+# airをインストール
+RUN go install github.com/air-verse/air@latest
+
+# ソースコードをコピー (volumesでマウントされるが、イメージ作成のためにも必要)
+COPY . .
+
+# 開発サーバーの実行は docker-compose.dev.yml の command で上書きされます
+CMD ["sh"]

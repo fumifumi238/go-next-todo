@@ -60,7 +60,7 @@ func dbCheckHandler(c *gin.Context) {
 // Ginのハンドラー関数
 func helloHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Hello from Go Backend (Gin)!",
+		"message": "接続できました",
 	})
 }
 

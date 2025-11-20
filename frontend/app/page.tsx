@@ -27,6 +27,7 @@ export default async function Page() {
       <p>Backend Response:</p>
       {/* 取得したJSONデータを表示 */}
       <pre>{JSON.stringify(data, null, 2)}</pre>
+      <p>変えた</p>
     </div>
   );
 }

@@ -2,10 +2,12 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -13,7 +15,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
-	"go-next-to-do/backend/internal/todo"
+	"go-next-todo/backend/internal/todo"
 )
 
 // DB接続をグローバル（または構造体）に保持するため、db変数を定義
@@ -29,8 +31,9 @@ func getDSN() string {
 	name := os.Getenv("DB_NAME")
 
 	// DSN (Data Source Name) 形式に整形
-	// 例: user:pass@tcp(db:3306)/dbname
-	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", user, pass, host, port, name)
+	// parseTime=true: MySQLのDATETIME/TIMESTAMPをtime.Timeに自動変換
+	// 例: user:pass@tcp(db:3306)/dbname?parseTime=true
+	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", user, pass, host, port, name)
 }
 
 // ------------------------------------
@@ -82,6 +85,104 @@ func createTodoHandler(c *gin.Context) {
 	c.JSON(http.StatusCreated, createdTodo)
 }
 
+// getTodoByIDHandler は指定されたIDのToDoタスクを取得します。
+func getTodoByIDHandler(c *gin.Context) {
+	// パラメータからIDを取得
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	// リポジトリ層を呼び出してDBから取得
+	foundTodo, err := todoRepo.FindByID(id)
+	if err != nil {
+		// TODOが見つからない場合
+		if errors.Is(err, todo.ErrTodoNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Todo not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch todo from database", "details": err.Error()})
+		return
+	}
+
+	// 200 OK ステータスと取得したオブジェクトを返す
+	c.JSON(http.StatusOK, foundTodo)
+}
+
+// updateTodoHandler は指定されたIDのToDoタスクを更新します。
+func updateTodoHandler(c *gin.Context) {
+	// パラメータからIDを取得
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	// リクエストボディのJSONを構造体にバインド
+	var updateTodo todo.Todo
+	if err := c.ShouldBindJSON(&updateTodo); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload", "details": err.Error()})
+		return
+	}
+
+	// リポジトリ層を呼び出してDBを更新
+	updatedTodo, err := todoRepo.Update(id, &updateTodo)
+	if err != nil {
+		// TODOが見つからない場合
+		if errors.Is(err, todo.ErrTodoNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Todo not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update todo in database", "details": err.Error()})
+		return
+	}
+
+	// 200 OK ステータスと更新されたオブジェクトを返す
+	c.JSON(http.StatusOK, updatedTodo)
+}
+
+// deleteTodoHandler は指定されたIDのToDoタスクを削除します。
+func deleteTodoHandler(c *gin.Context) {
+	// パラメータからIDを取得
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	// リポジトリ層を呼び出してDBから削除
+	err = todoRepo.Delete(id)
+	if err != nil {
+		// TODOが見つからない場合
+		if errors.Is(err, todo.ErrTodoNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Todo not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete todo from database", "details": err.Error()})
+		return
+	}
+
+	// 204 No Content ステータスを返す
+	c.Status(http.StatusNoContent)
+}
+
+// getTodosHandler はすべてのToDoタスクを取得します。
+func getTodosHandler(c *gin.Context) {
+	// リポジトリ層を呼び出してDBから取得
+	todos, err := todoRepo.FindAll()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch todos from database", "details": err.Error()})
+		return
+	}
+
+	// 200 OK ステータスと取得したオブジェクトの配列を返す
+	c.JSON(http.StatusOK, todos)
+}
+
 // ------------------------------------
 // 💡 追加: ヘルスチェック用ハンドラー
 // ------------------------------------
@@ -130,7 +231,11 @@ func main() {
 	// ルーティングの設定
 	r.GET("/api/hello", helloHandler)
 	r.GET("/api/dbcheck", dbCheckHandler)
-	r.POST("/api/todos", createTodoHandler) // タスク作成
+	r.GET("/api/todos", getTodosHandler)        // タスク一覧取得
+	r.GET("/api/todos/:id", getTodoByIDHandler) // タスク取得（ID指定）
+	r.POST("/api/todos", createTodoHandler)     // タスク作成
+	r.PUT("/api/todos/:id", updateTodoHandler)  // タスク更新
+	r.DELETE("/api/todos/:id", deleteTodoHandler) // タスク削除
 
 	// サーバー起動
 	log.Println("Server listening on port 8080...")

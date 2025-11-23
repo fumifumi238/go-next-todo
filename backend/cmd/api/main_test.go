@@ -11,10 +11,11 @@ import (
 	"strconv"
 	"testing"
 
-	_ "github.com/go-sql-driver/mysql"
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/assert"
 	"go-next-todo/backend/internal/todo"
+
+	"github.com/gin-gonic/gin"
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/stretchr/testify/assert"
 )
 
 // setupTestDB はテスト用のDB接続をセットアップします
@@ -473,4 +474,46 @@ func TestDeleteTodo_NotFound(t *testing.T) {
 	// Assert: 結果の検証
 	// 期待値: ステータスコード 404 Not Found
 	assert.Equal(t, http.StatusNotFound, w.Code, "Expected HTTP Status Code 404 Not Found")
+}
+
+
+// ----------------------------------------------------
+// Step 6: ユーザー登録 (POST /api/register) - レッドフェーズ
+// ----------------------------------------------------
+
+func TestRegisterUser_InvalidInput(t *testing.T) {
+	// Arrange: ルーターの準備
+	// ユーザー登録のエンドポイントは認証不要なので、認証ミドルウェアは不要
+	r, testDB, err := setupRouter() // setupRouterを再利用するが、DBへのUserRepository初期化は別途行う
+	if err != nil {
+		t.Skipf("Skipping test: Failed to setup router (DB connection required): %v", err)
+	}
+	defer testDB.Close()
+
+	// ⚠️ ここではまだ registerHandler を実装していないため、ダミーハンドラーを追加
+	// テストをREDにするために、存在しないハンドラーを呼び出すように設定
+	r.POST("/api/register", func(c *gin.Context) {
+		// まだ実装されていないので、とりあえずNotImplementedを返す
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "Not Implemented"})
+	})
+
+	// 無効なリクエストボディ（usernameが欠落）
+	invalidUserJSON := []byte(`{"email": "test@example.com", "password": "password123"}`)
+
+	req, _ := http.NewRequest("POST", "/api/register", bytes.NewBuffer(invalidUserJSON))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	// Act: リクエストを実行
+	r.ServeHTTP(w, req)
+
+	// Assert: 結果の検証
+	// 期待値: ステータスコード 400 Bad Request
+	assert.Equal(t, http.StatusBadRequest, w.Code, "Expected HTTP Status Code 400 Bad Request for invalid input")
+
+	// 期待値: エラーレスポンスボディ
+	var response map[string]string
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err, "Response should be a valid JSON object")
+	assert.Contains(t, response["error"], "Invalid request payload", "Expected error message for invalid input")
 }

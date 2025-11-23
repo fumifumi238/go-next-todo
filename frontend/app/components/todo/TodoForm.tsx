@@ -14,7 +14,8 @@ export default function TodoForm({ onAdd }: TodoFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!title.trim()) {
+    // title.trim() === ''のほうが読みやすいです。
+    if (title.trim()==='') {
       alert('TODOのタイトルを入力してください');
       return;
     }
@@ -48,7 +49,7 @@ export default function TodoForm({ onAdd }: TodoFormProps) {
         />
         <button
           type="submit"
-          disabled={isSubmitting || !title.trim()}
+          disabled={isSubmitting || title.trim() ===''}
           className="px-6 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isSubmitting ? '追加中...' : '追加'}

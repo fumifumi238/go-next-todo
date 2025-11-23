@@ -24,7 +24,11 @@ export default function TodoList({ todos, onUpdate }: TodoListProps) {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: number|undefined) => {
+    if(id === undefined){
+      alert('IDが未指定です');
+      return;
+    }
     if (!confirm('このTODOを削除しますか？')) return;
 
     try {
@@ -66,8 +70,9 @@ export default function TodoList({ todos, onUpdate }: TodoListProps) {
           >
             {todo.title}
           </span>
+          {/* todo.idはhandeleDeleteの中でundefinedかどうかをチェックしたほうが読みやすいです。 */}
           <button
-            onClick={() => todo.id && handleDelete(todo.id)}
+            onClick={() => handleDelete(todo.id)}
             className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
           >
             削除

@@ -19,7 +19,7 @@ type Todo struct {
 	CreatedAt time.Time `json:"created_at"`
 
 	// UpdatedAt: 更新日時 (追加することが多いが、ここでは一旦省略)
-	// UpdatedAt time.Time `json:"updated_at,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
 }
 
 // 💡 補足:

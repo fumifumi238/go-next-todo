@@ -100,6 +100,7 @@ export async function updateTodo(id: number, todo: Omit<Todo, 'id' | 'created_at
 }
 
 export async function deleteTodo(id: number): Promise<void> {
+
   try {
     const res = await fetch(`${API_URL}/api/todos/${id}`, {
       method: 'DELETE',

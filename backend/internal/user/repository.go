@@ -19,6 +19,20 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{DB: db}
 }
 
+// 💡 追加: HashPassword は与えられたパスワードをbcryptでハッシュ化します。
+func HashPassword(password string) (string, error) {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", fmt.Errorf("failed to hash password: %w", err)
+	}
+	return string(hashedPassword), nil
+}
+
+// 💡 追加: VerifyPassword はハッシュ化されたパスワードと平文のパスワードを比較します。
+func VerifyPassword(hashedPassword, password string) error {
+	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
+}
+
 // Create は新しいユーザーをデータベースに挿入します。
 func (r *Repository) Create(u *User) (*User, error) {
 	// パスワードをハッシュ化

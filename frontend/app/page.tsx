@@ -6,7 +6,11 @@ import { fetchTodos } from './lib/api/todo';
 import TodoForm from './components/todo/TodoForm';
 import TodoList from './components/todo/TodoList';
 
+
+
 export default function Page() {
+
+
   const [todos, setTodos] = useState<Todo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,6 +21,7 @@ export default function Page() {
       setError(null);
       const data = await fetchTodos();
       setTodos(data);
+          console.log('Fetched Todos Data:', data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'TODOの読み込みに失敗しました');
       console.error('Failed to load todos:', err);

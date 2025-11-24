@@ -15,12 +15,14 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
-	"go-next-todo/backend/internal/todo"
+	todoPkg "go-next-todo/backend/internal/todo" // パッケージエイリアスを使用
+	userPkg "go-next-todo/backend/internal/user" // 追加: userパッケージをインポート
 )
 
-// DB接続をグローバル（または構造体）に保持するため、db変数を定義
+// DB接続をグローバル（または構造体）に保持するため、db変数とリポジトリ変数を定義
 var db *sql.DB
-var todoRepo *todo.Repository
+var todoRepo *todoPkg.Repository // パッケージエイリアスを使用
+var userRepo *userPkg.Repository // 追加: userリポジトリ変数を定義
 
 // getDSN は環境変数からMySQL接続文字列 (DSN) を構築します。
 func getDSN() string {
@@ -66,7 +68,7 @@ func initDB() {
 
 // createTodoHandler は新しいToDoタスクを作成し、DBに保存します。
 func createTodoHandler(c *gin.Context) {
-	var newTodo todo.Todo
+	var newTodo todoPkg.Todo // パッケージエイリアスを使用
 
 	// 1. リクエストボディのJSONを構造体にバインド（バリデーションも実行）
 	if err := c.ShouldBindJSON(&newTodo); err != nil {
@@ -99,7 +101,7 @@ func getTodoByIDHandler(c *gin.Context) {
 	foundTodo, err := todoRepo.FindByID(id)
 	if err != nil {
 		// TODOが見つからない場合
-		if errors.Is(err, todo.ErrTodoNotFound) {
+		if errors.Is(err, todoPkg.ErrTodoNotFound) { // パッケージエイリアスを使用
 			c.JSON(http.StatusNotFound, gin.H{"error": "Todo not found"})
 			return
 		}
@@ -122,7 +124,7 @@ func updateTodoHandler(c *gin.Context) {
 	}
 
 	// リクエストボディのJSONを構造体にバインド
-	var updateTodo todo.Todo
+	var updateTodo todoPkg.Todo // パッケージエイリアスを使用
 	if err := c.ShouldBindJSON(&updateTodo); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload", "details": err.Error()})
 		return
@@ -132,7 +134,7 @@ func updateTodoHandler(c *gin.Context) {
 	updatedTodo, err := todoRepo.Update(id, &updateTodo)
 	if err != nil {
 		// TODOが見つからない場合
-		if errors.Is(err, todo.ErrTodoNotFound) {
+		if errors.Is(err, todoPkg.ErrTodoNotFound) { // パッケージエイリアスを使用
 			c.JSON(http.StatusNotFound, gin.H{"error": "Todo not found"})
 			return
 		}
@@ -158,7 +160,7 @@ func deleteTodoHandler(c *gin.Context) {
 	err = todoRepo.Delete(id)
 	if err != nil {
 		// TODOが見つからない場合
-		if errors.Is(err, todo.ErrTodoNotFound) {
+		if errors.Is(err, todoPkg.ErrTodoNotFound) { // パッケージエイリアスを使用
 			c.JSON(http.StatusNotFound, gin.H{"error": "Todo not found"})
 			return
 		}
@@ -182,6 +184,59 @@ func getTodosHandler(c *gin.Context) {
 	// 200 OK ステータスと取得したオブジェクトの配列を返す
 	c.JSON(http.StatusOK, todos)
 }
+
+// ------------------------------------
+// 💡 追加: ユーザー登録ハンドラー
+// ------------------------------------
+func registerHandler(c *gin.Context) {
+	var newUser userPkg.User // userPkg.User を使用
+	if err := c.ShouldBindJSON(&newUser); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload", "details": err.Error()})
+		return
+	}
+
+	// ユーザー名のバリデーション
+	if newUser.Username == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Username is required"})
+		return
+	}
+	// メールアドレスのバリデーション (簡易版)
+	if newUser.Email == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Email is required"})
+		return
+	}
+	// パスワードのバリデーション (簡易版)
+	if newUser.PasswordHash == "" { // ここは一時的にPasswordHashフィールドでパスワードを受け取る
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Password is required"})
+		return
+	}
+
+	// パスワードをハッシュ化
+	hashedPassword, err := userPkg.HashPassword(newUser.PasswordHash)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password", "details": err.Error()})
+		return
+	}
+	newUser.PasswordHash = hashedPassword // ハッシュ化されたパスワードを設定
+
+	// ユーザーをデータベースに保存
+	createdUser, err := userRepo.Create(&newUser)
+	if err != nil {
+		// エラーの種類に応じて適切なステータスを返す
+		if errors.Is(err, sql.ErrNoRows) { // 例: ユーザー名やメールアドレスが既に存在する場合など
+			c.JSON(http.StatusConflict, gin.H{"error": "Username or email already exists"})
+			return
+		}
+		log.Printf("Failed to create user: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user", "details": err.Error()})
+		return
+	}
+
+	// パスワードハッシュはレスポンスに含めない
+	createdUser.PasswordHash = ""
+	c.JSON(http.StatusCreated, createdUser)
+}
+
 
 // ------------------------------------
 // 💡 追加: ヘルスチェック用ハンドラー
@@ -213,7 +268,8 @@ func main() {
 	initDB()
 
 	// 2. リポジトリの初期化
-	todoRepo = todo.NewRepository(db)
+	todoRepo = todoPkg.NewRepository(db) // パッケージエイリアスを使用
+	userRepo = userPkg.NewRepository(db) // 追加: userリポジトリの初期化
 
 	r := gin.Default()
 
@@ -224,7 +280,8 @@ func main() {
 	// Next.js (http://localhost:3000) からのアクセスを許可
 	config.AllowOrigins = []string{"http://localhost:3000"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept"}
+	// 認証情報を伴うリクエストのために'Authorization'ヘッダーを許可リストに追加
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"} // 'Authorization'を追加
 
 	r.Use(cors.New(config))
 
@@ -236,6 +293,9 @@ func main() {
 	r.POST("/api/todos", createTodoHandler)     // タスク作成
 	r.PUT("/api/todos/:id", updateTodoHandler)  // タスク更新
 	r.DELETE("/api/todos/:id", deleteTodoHandler) // タスク削除
+
+	// 💡 追加: ユーザー登録エンドポイント
+	r.POST("/api/register", registerHandler)
 
 	// サーバー起動
 	log.Println("Server listening on port 8080...")

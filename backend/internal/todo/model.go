@@ -1,6 +1,8 @@
 package todo
 
-import "time"
+import (
+	"time"
+)
 
 type Todo struct {
 	ID        int       `json:"id,omitempty"`              // 主キー

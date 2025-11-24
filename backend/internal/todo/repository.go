@@ -70,11 +70,19 @@ func (r *Repository) FindAll() ([]*Todo, error) {
 		return nil, fmt.Errorf("error iterating todos: %w", err)
 	}
 
+		// 💡 ここを修正: 結果が空の場合でも、nilではなく空のスライスを返す
+	if todos == nil {
+		return []*Todo{}, nil // 明示的に空のスライスを返す
+	}
+
+
+
 	return todos, nil
 }
 
-// ErrTodoNotFound はTODOが見つからない場合のエラーです。
+	// ErrTodoNotFound はTODOが見つからない場合のエラーです。
 var ErrTodoNotFound = errors.New("todo not found")
+
 
 // FindByID は指定されたIDのTodoタスクをデータベースから取得します。
 func (r *Repository) FindByID(id int) (*Todo, error) {

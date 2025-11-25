@@ -250,6 +250,7 @@ func helloHandler(c *gin.Context) {
 // dbCheckHandler はデータベース接続の健全性を確認します。
 func dbCheckHandler(c *gin.Context) {
 	// PingでDB接続をチェック
+
 	if err := db.Ping(); err != nil {
 		log.Printf("DB Ping failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{

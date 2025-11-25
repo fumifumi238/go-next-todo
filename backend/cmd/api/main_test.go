@@ -6,15 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strconv"
 	"testing"
 	"time"
-
-	"github.com/joho/godotenv"
 
 	// timeパッケージがCreateTodo内で使われているため追加
 	todoPkg "go-next-todo/backend/internal/todo"
@@ -27,12 +24,7 @@ import (
 
 // setupTestDB はテスト用のDB接続をセットアップします
 func setupTestDB() (*sql.DB, error) {
-	err := godotenv.Load("../../../.env")
 
-	        if err != nil {
-            log.Printf("Warning: Error loading .env file: %v", err)
-            // エラーがあっても処理を続行（環境変数が直接設定されている可能性も考慮）
-        }
 	user := os.Getenv("TEST_DB_USER")
 	pass := os.Getenv("TEST_DB_PASS")
 	host := os.Getenv("TEST_DB_HOST")

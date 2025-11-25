@@ -8,12 +8,14 @@ services:
     container_name: go-backend
     ports:
       - "8080:8080"
-    environment:
-      DB_HOST: db # Dockerネットワークサービス名
-      DB_PORT: 3306
-      DB_USER: ${DB_USER}
-      DB_PASS: ${DB_PASS}
-      DB_NAME: ${DB_NAME}
+    env_file:
+      - .env
+    # environment:
+    #   DB_HOST: db # Dockerネットワークサービス名
+    #   DB_PORT: 3306
+    #   DB_USER: ${DB_USER}
+    #   DB_PASS: ${DB_PASS}
+    #   DB_NAME: ${DB_NAME}
     depends_on:
       - db
 

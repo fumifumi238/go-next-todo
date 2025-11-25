@@ -7,6 +7,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile.dev
     # ソースコードをマウントし、airによる自動リロードを有効化
+    env_file:
+      - .env
     volumes:
       - ./backend:/app
     # 実行コマンドをairに変更

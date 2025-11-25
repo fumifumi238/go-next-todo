@@ -17,6 +17,7 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{DB: db}
 }
 
+
 // ... existing imports ...
 
 // Create は新しいTodoタスクをデータベースに挿入します。

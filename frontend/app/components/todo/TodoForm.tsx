@@ -25,6 +25,7 @@ export default function TodoForm({ onAdd }: TodoFormProps) {
       await createTodo({
         title: title.trim(),
         completed: false,
+        user_id:1 // 仮設定
       });
       setTitle('');
       onAdd();

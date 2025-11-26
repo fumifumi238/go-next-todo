@@ -35,12 +35,6 @@ func VerifyPassword(hashedPassword, password string) error {
 
 // Create は新しいユーザーをデータベースに挿入します。
 func (r *Repository) Create(u *User) (*User, error) {
-	// パスワードをハッシュ化
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
-	}
-	u.PasswordHash = string(hashedPassword)
 
 	query := "INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)"
 	result, err := r.DB.Exec(query, u.Username, u.Email, u.PasswordHash, u.Role)
@@ -56,7 +50,6 @@ func (r *Repository) Create(u *User) (*User, error) {
 	u.ID = int(id)
 	u.CreatedAt = time.Now() // DBで自動設定されるが、ここではテスト用に設定
 	u.UpdatedAt = time.Now() // DBで自動設定されるが、ここではテスト用に設定
-	u.Password = "" // パスワード情報は返さない
 
 	return u, nil
 }

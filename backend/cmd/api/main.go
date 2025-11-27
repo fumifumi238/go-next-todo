@@ -27,7 +27,20 @@ var todoRepo *todoPkg.Repository // パッケージエイリアスを使用
 var userRepo *userPkg.Repository // 追加: userリポジトリ変数を定義
 
 // JWT署名のためのシークレットキー
-var jwtSecret = []byte(os.Getenv("JWT_SECRET"))
+var jwtSecret = []byte{}
+
+// InitJWTSecretForTest はテスト目的でjwtSecretを初期化します。
+// これにより、テストでAuthMiddlewareがjwtSecretにアクセスできるようになります。
+func InitJWTSecretForTest() {
+	if len(jwtSecret) == 0 {
+		secret := os.Getenv("JWT_SECRET")
+		if secret == "" {
+			log.Fatal("Fatal: JWT_SECRET environment variable is not set. Please set it in your .env file or test setup.")
+		}
+		jwtSecret = []byte(secret)
+	}
+}
+
 
 // getDSN は環境変数からMySQL接続文字列 (DSN) を構築します。
 func getDSN() string {
@@ -73,7 +86,7 @@ func initDB() {
 }
 
 // createTodoHandler は新しいToDoタスクを作成し、DBに保存します。
-func createTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
+func CreateTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
 	var newTodo todoPkg.Todo // パッケージエイリアスを使用
 
 	// 1. リクエストボディのJSONを構造体にバインド（バリデーションも実行）
@@ -94,7 +107,7 @@ func createTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
 }
 
 // getTodoByIDHandler は指定されたIDのToDoタスクを取得します。
-func getTodoByIDHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
+func GetTodoByIDHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
 	// パラメータからIDを取得
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
@@ -120,7 +133,7 @@ func getTodoByIDHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
 }
 
 // updateTodoHandler は指定されたIDのToDoタスクを更新します。
-func updateTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
+func UpdateTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
 	// パラメータからIDを取得
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
@@ -153,7 +166,7 @@ func updateTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
 }
 
 // deleteTodoHandler は指定されたIDのToDoタスクを削除します。
-func deleteTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
+func DeleteTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
 	// パラメータからIDを取得
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
@@ -179,7 +192,7 @@ func deleteTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
 }
 
 // getTodosHandler はすべてのToDoタスクを取得します。
-func getTodosHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
+func GetTodosHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
 	// リポジトリ層を呼び出してDBから取得
 	todos, err := todoRepo.FindAll()
 	if err != nil {
@@ -283,6 +296,73 @@ func loginHandler(c *gin.Context, userRepo *userPkg.Repository) {
 	c.JSON(http.StatusOK, gin.H{"token": tokenString})
 }
 
+// AuthMiddleware はJWTトークンを検証し、ユーザー情報をコンテキストに設定するミドルウェアです。
+func AuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tokenString := c.GetHeader("Authorization")
+		if tokenString == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
+			c.Abort()
+			return
+		}
+
+		// "Bearer " プレフィックスを削除
+		if len(tokenString) < 7 || tokenString[:7] != "Bearer " {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token format"})
+			c.Abort()
+			return
+		}
+		tokenString = tokenString[7:]
+
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			// アルゴリズムがHMACであることを確認
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, jwt.ErrSignatureInvalid
+			}
+			return jwtSecret, nil
+		})
+
+		if err != nil {
+			log.Printf("JWT parse error: %v", err)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+			c.Abort()
+			return
+		}
+
+		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+			// claimsからユーザー情報を取得
+			userID, ok := claims["user_id"].(float64)
+			if !ok {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "User ID not found in token claims"})
+				c.Abort()
+				return
+			}
+			userEmail, ok := claims["email"].(string)
+			if !ok {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "User email not found in token claims"})
+				c.Abort()
+				return
+			}
+			userRole, ok := claims["role"].(string)
+			if !ok {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "User role not found in token claims"})
+				c.Abort()
+				return
+			}
+
+			// Ginコンテキストにユーザー情報を設定
+			c.Set("user_id", int(userID)) // float64からintにキャスト
+			c.Set("user_email", userEmail)
+			c.Set("user_role", userRole)
+			c.Next() // 次のハンドラに進む
+		} else {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+			c.Abort()
+			return
+		}
+	}
+}
+
 // helloHandler はシンプルなヘルスチェックエンドポイントです。
 func helloHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Hello from Go Backend!"})
@@ -309,13 +389,10 @@ func main() {
 	if err != nil {
 		log.Printf("Error loading .env file (this is fine if using explicit env vars): %v", err)
 	}
-
-	// JWT_SECRET が設定されているか確認
-	if os.Getenv("JWT_SECRET") == "" {
+	if os.Getenv("JWT_SECRET") == "" { // 💡 ここでjwtSecretが初期化される
 		log.Fatal("Fatal: JWT_SECRET environment variable is not set. Please set it in your .env file.")
 	}
-	jwtSecret = []byte(os.Getenv("JWT_SECRET")) // 環境変数からシークレットキーをロード
-
+	jwtSecret = []byte(os.Getenv("JWT_SECRET")) //
 	// 1. データベース接続の初期化
 	initDB()
 
@@ -340,11 +417,18 @@ func main() {
 	// ルーティングの設定 (クロージャを使用してリポジトリをハンドラーに注入)
 	r.GET("/api/hello", helloHandler)
 	r.GET("/api/dbcheck", func(c *gin.Context) { dbCheckHandler(c, db) })
-	r.GET("/api/todos", func(c *gin.Context) { getTodosHandler(c, todoRepo) })        // タスク一覧取得
-	r.GET("/api/todos/:id", func(c *gin.Context) { getTodoByIDHandler(c, todoRepo) }) // タスク取得（ID指定）
-	r.POST("/api/todos", func(c *gin.Context) { createTodoHandler(c, todoRepo) })     // タスク作成
-	r.PUT("/api/todos/:id", func(c *gin.Context) { updateTodoHandler(c, todoRepo) })  // タスク更新
-	r.DELETE("/api/todos/:id", func(c *gin.Context) { deleteTodoHandler(c, todoRepo) }) // タスク削除
+
+	// 💡 追加: 認証が必要なルートグループ
+	authorized := r.Group("/")
+	authorized.Use(AuthMiddleware()) // 認証ミドルウェアを適用
+	{
+		// TODO関連APIを認証グループに追加
+		authorized.GET("/api/todos", func(c *gin.Context) { GetTodosHandler(c, todoRepo) })
+		authorized.GET("/api/todos/:id", func(c *gin.Context) { GetTodoByIDHandler(c, todoRepo) })
+		authorized.POST("/api/todos", func(c *gin.Context) { CreateTodoHandler(c, todoRepo) })
+		authorized.PUT("/api/todos/:id", func(c *gin.Context) { UpdateTodoHandler(c, todoRepo) })
+		authorized.DELETE("/api/todos/:id", func(c *gin.Context) { DeleteTodoHandler(c, todoRepo) })
+	}
 
 	// 💡 追加: ユーザー関連エンドポイント
 	r.POST("/api/register", func(c *gin.Context) { registerHandler(c, userRepo) }) // ユーザー登録

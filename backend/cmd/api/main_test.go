@@ -165,11 +165,11 @@ func setupRouter() (*gin.Engine, *sql.DB, *todoPkg.Repository, *userPkg.Reposito
 	authorized.Use(AuthMiddleware()) // 💡 main.go で定義した実際のAuthMiddlewareを適用
 	{
 		// TODO関連APIを認証グループに追加
-		authorized.GET("/api/todos", func(c *gin.Context) { GetTodosHandler(c, testTodoRepo) })
-		authorized.GET("/api/todos/:id", func(c *gin.Context) { GetTodoByIDHandler(c, testTodoRepo) })
-		authorized.POST("/api/todos", func(c *gin.Context) { CreateTodoHandler(c, testTodoRepo) })
-		authorized.PUT("/api/todos/:id", func(c *gin.Context) { UpdateTodoHandler(c, testTodoRepo) })
-		authorized.DELETE("/api/todos/:id", func(c *gin.Context) { DeleteTodoHandler(c, testTodoRepo) })
+		authorized.GET("/api/todos", func(c *gin.Context) { getTodosHandler(c, testTodoRepo) })
+		authorized.GET("/api/todos/:id", func(c *gin.Context) { getTodoByIDHandler(c, testTodoRepo) })
+		authorized.POST("/api/todos", func(c *gin.Context) { createTodoHandler(c, testTodoRepo) })
+		authorized.PUT("/api/todos/:id", func(c *gin.Context) { updateTodoHandler(c, testTodoRepo) })
+		authorized.DELETE("/api/todos/:id", func(c *gin.Context) { deleteTodoHandler(c, testTodoRepo) })
 
 		// 💡 追加: 認証ミドルウェアのテスト用エンドポイント
 		authorized.GET("/api/protected", ProtectedHandler) // main_test.go の ProtectedHandler をAuthMiddleware経由で呼び出す

@@ -16,6 +16,7 @@ export default function TodoList({ todos, onUpdate }: TodoListProps) {
       await updateTodo(todo.id, {
         title: todo.title,
         completed: !todo.completed,
+        user_id:1
       });
       onUpdate();
     } catch (error) {

@@ -86,7 +86,7 @@ func initDB() {
 }
 
 // createTodoHandler は新しいToDoタスクを作成し、DBに保存します。
-func CreateTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
+func createTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
 	var newTodo todoPkg.Todo // パッケージエイリアスを使用
 
 	// 1. リクエストボディのJSONを構造体にバインド（バリデーションも実行）
@@ -107,7 +107,7 @@ func CreateTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
 }
 
 // getTodoByIDHandler は指定されたIDのToDoタスクを取得します。
-func GetTodoByIDHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
+func getTodoByIDHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
 	// パラメータからIDを取得
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
@@ -133,7 +133,7 @@ func GetTodoByIDHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
 }
 
 // updateTodoHandler は指定されたIDのToDoタスクを更新します。
-func UpdateTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
+func updateTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
 	// パラメータからIDを取得
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
@@ -166,7 +166,7 @@ func UpdateTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
 }
 
 // deleteTodoHandler は指定されたIDのToDoタスクを削除します。
-func DeleteTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
+func deleteTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
 	// パラメータからIDを取得
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
@@ -192,7 +192,7 @@ func DeleteTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
 }
 
 // getTodosHandler はすべてのToDoタスクを取得します。
-func GetTodosHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
+func getTodosHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
 	// リポジトリ層を呼び出してDBから取得
 	todos, err := todoRepo.FindAll()
 	if err != nil {
@@ -423,11 +423,11 @@ func main() {
 	authorized.Use(AuthMiddleware()) // 認証ミドルウェアを適用
 	{
 		// TODO関連APIを認証グループに追加
-		authorized.GET("/api/todos", func(c *gin.Context) { GetTodosHandler(c, todoRepo) })
-		authorized.GET("/api/todos/:id", func(c *gin.Context) { GetTodoByIDHandler(c, todoRepo) })
-		authorized.POST("/api/todos", func(c *gin.Context) { CreateTodoHandler(c, todoRepo) })
-		authorized.PUT("/api/todos/:id", func(c *gin.Context) { UpdateTodoHandler(c, todoRepo) })
-		authorized.DELETE("/api/todos/:id", func(c *gin.Context) { DeleteTodoHandler(c, todoRepo) })
+		authorized.GET("/api/todos", func(c *gin.Context) { getTodosHandler(c, todoRepo) })
+		authorized.GET("/api/todos/:id", func(c *gin.Context) { getTodoByIDHandler(c, todoRepo) })
+		authorized.POST("/api/todos", func(c *gin.Context) { createTodoHandler(c, todoRepo) })
+		authorized.PUT("/api/todos/:id", func(c *gin.Context) { updateTodoHandler(c, todoRepo) })
+		authorized.DELETE("/api/todos/:id", func(c *gin.Context) { deleteTodoHandler(c, todoRepo) })
 	}
 
 	// 💡 追加: ユーザー関連エンドポイント

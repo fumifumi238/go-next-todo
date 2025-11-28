@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
@@ -106,7 +107,6 @@ func setupTestDB() (*sql.DB, error) {
 		Role:         "user",
 	}
 	if _, err := userRepo.Create(&normalUser); err != nil {
-		// すでに存在する場合でもエラーにしない
 		log.Printf("Failed to create normal_user (might exist, or duplicate entry): %v", err)
 	}
 
@@ -141,42 +141,70 @@ func setupRouter() (*gin.Engine, *sql.DB, *todoPkg.Repository, *userPkg.Reposito
 
 	r := gin.Default()
 
-// main.go のjwtSecretを設定 (テスト用に直接設定)
-	os.Setenv("JWT_SECRET", "test_very_secret_jwt_key_here") // テスト用のJWT_SECRETを設定
-	InitJWTSecretForTest() // main.go で定義したjwtSecretを初期化するヘルパー関数を呼び出す
+	// ------------------------------------
+	// CORS設定をルーターに適用 (main.go と同じ設定)
+	// ------------------------------------
+	config := cors.DefaultConfig()
+	config.AllowOrigins = []string{"http://localhost:3000"}
+	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
+	r.Use(cors.New(config))
 
 	// ------------------------------------
 	// main.go のハンドラーをクロージャでラッピングして登録
 	// ------------------------------------
 
+	// JWTシークレットをテスト用に初期化
+	os.Setenv("JWT_SECRET", "test_very_secret_jwt_key_here")
+	InitJWTSecretForTest() // main.go で定義したヘルパー関数を呼び出す
+
 	// ヘルスチェック
-	r.GET("/api/hello", helloHandler) // helloHandlerは引数を取らないので直接指定
+	r.GET("/api/hello", helloHandler)
 	r.GET("/api/dbcheck", func(c *gin.Context) { dbCheckHandler(c, testDB) })
 
-	// ユーザー登録ハンドラー
+	// TODO関連ハンドラー
+	// These routes are now protected by AuthMiddleware in main.go
+	// They should be called within the authorized group in tests as well,
+	// or have token explicitly added for non-group calls.
 	r.POST("/api/register", func(c *gin.Context) { registerHandler(c, testUserRepo) })
+	r.POST("/api/login", func(c *gin.Context) { loginHandler(c, testUserRepo) })
 
-
-
-		r.POST("/api/login", func(c *gin.Context) { loginHandler(c, testUserRepo) })
-
-	// 💡 認証ミドルウェアが適用されるルートグループ
+	// 認証ミドルウェアが適用されるルートグループ
 	authorized := r.Group("/")
-	authorized.Use(AuthMiddleware()) // 💡 main.go で定義した実際のAuthMiddlewareを適用
+	authorized.Use(AuthMiddleware()) // main.go で定義した実際のAuthMiddlewareを適用
 	{
-		// TODO関連APIを認証グループに追加
 		authorized.GET("/api/todos", func(c *gin.Context) { getTodosHandler(c, testTodoRepo) })
 		authorized.GET("/api/todos/:id", func(c *gin.Context) { getTodoByIDHandler(c, testTodoRepo) })
 		authorized.POST("/api/todos", func(c *gin.Context) { createTodoHandler(c, testTodoRepo) })
 		authorized.PUT("/api/todos/:id", func(c *gin.Context) { updateTodoHandler(c, testTodoRepo) })
 		authorized.DELETE("/api/todos/:id", func(c *gin.Context) { deleteTodoHandler(c, testTodoRepo) })
-
-		// 💡 追加: 認証ミドルウェアのテスト用エンドポイント
-		authorized.GET("/api/protected", ProtectedHandler) // main_test.go の ProtectedHandler をAuthMiddleware経由で呼び出す
+		authorized.GET("/api/protected", ProtectedHandler)
 	}
 
-
 	return r, testDB, testTodoRepo, testUserRepo, nil
+}
+
+// 💡 JWTトークンを取得するヘルパー関数
+func loginAndGetToken(t *testing.T, r *gin.Engine, email, password string) string {
+	loginCredentials := map[string]string{
+		"email":    email,
+		"password": password,
+	}
+	jsonValue, _ := json.Marshal(loginCredentials)
+
+	loginReq, _ := http.NewRequest("POST", "/api/login", bytes.NewBuffer(jsonValue))
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginW := httptest.NewRecorder()
+	r.ServeHTTP(loginW, loginReq)
+
+	assert.Equal(t, http.StatusOK, loginW.Code, "Login failed: Expected HTTP Status Code 200 OK")
+	var loginResponse map[string]string
+	err := json.Unmarshal(loginW.Body.Bytes(), &loginResponse)
+	assert.NoError(t, err, "Failed to unmarshal login response")
+	tokenString, exists := loginResponse["token"]
+	assert.True(t, exists, "Expected JWT token from login response")
+	assert.NotEmpty(t, tokenString, "Expected JWT token not to be empty")
+	return tokenString
 }
 
 // ------------------------------------
@@ -191,16 +219,19 @@ func TestCreateTodo_Success(t *testing.T) {
 	}
 	defer testDB.Close()
 
-	// テスト用のToDoデータ
-	newTodo := map[string]interface{}{
-		"title":     "Test Todo",
-		"completed": false,
-		"user_id":   1, // テストユーザーID
+	// 💡 ログインしてJWTトークンを取得
+	token := loginAndGetToken(t, r, "normal_user@example.com", "password123")
+
+	newTodo := todoPkg.Todo{
+		UserID:    1, // normal_userのIDは1
+		Title:     "Test Todo",
+		Completed: false,
 	}
 	jsonValue, _ := json.Marshal(newTodo)
 
 	req, _ := http.NewRequest("POST", "/api/todos", bytes.NewBuffer(jsonValue))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token) // 💡 JWTトークンをヘッダーに追加
 	w := httptest.NewRecorder()
 
 	// Act: リクエストを実行
@@ -208,16 +239,16 @@ func TestCreateTodo_Success(t *testing.T) {
 
 	// Assert: 結果の検証
 	assert.Equal(t, http.StatusCreated, w.Code, "Expected HTTP Status Code 201 Created")
+	var createdTodo todoPkg.Todo
+	err = json.Unmarshal(w.Body.Bytes(), &createdTodo)
+	assert.NoError(t, err, "Response should be a valid JSON todo object")
 
-	var responseTodo todoPkg.Todo
-	err = json.Unmarshal(w.Body.Bytes(), &responseTodo)
-	assert.NoError(t, err, "Response should be a valid JSON object")
-	assert.NotZero(t, responseTodo.ID, "Expected a non-zero Todo ID")
-	assert.Equal(t, "Test Todo", responseTodo.Title, "Expected title to match")
-	assert.False(t, responseTodo.Completed, "Expected completed to be false")
-	assert.NotZero(t, responseTodo.CreatedAt, "Expected CreatedAt to be set")
-	assert.NotZero(t, responseTodo.UpdatedAt, "Expected UpdatedAt to be set")
-	assert.Equal(t, 1, responseTodo.UserID, "Expected UserID to be 1")
+	assert.NotZero(t, createdTodo.ID, "Expected a non-zero Todo ID")
+	assert.Equal(t, newTodo.Title, createdTodo.Title, "Expected title to match")
+	assert.False(t, createdTodo.Completed, "Expected completed to be false")
+	assert.NotZero(t, createdTodo.CreatedAt, "Expected CreatedAt to be set")
+	assert.NotZero(t, createdTodo.UpdatedAt, "Expected UpdatedAt to be set")
+	assert.Equal(t, newTodo.UserID, createdTodo.UserID, "Expected UserID to be 1")
 }
 
 // ------------------------------------
@@ -232,18 +263,21 @@ func TestGetTodos_Success(t *testing.T) {
 	}
 	defer testDB.Close()
 
-	// テスト用のToDoをいくつか作成 (ユーザーID=1)
-	todo1 := todoPkg.Todo{Title: "Test Todo 1", Completed: false, UserID: 1}
-	_, err = todoRepo.Create(&todo1)
+	// 💡 ログインしてJWTトークンを取得
+	token := loginAndGetToken(t, r, "normal_user@example.com", "password123")
+
+	// 既存のTODOを挿入
+	todo1 := &todoPkg.Todo{UserID: 1, Title: "Test Todo 1", Completed: false}
+	todo2 := &todoPkg.Todo{UserID: 1, Title: "Test Todo 2", Completed: true}
+	createdTodo1, err := todoRepo.Create(todo1)
+	assert.NoError(t, err)
+	time.Sleep(2 * time.Second) // 異なる CreatedAt タイムスタンプを保証するために一時停止
+	createdTodo2, err := todoRepo.Create(todo2)
 	assert.NoError(t, err)
 
-	time.Sleep(2 * time.Second) // created_at が異なることを保証するため
-
-	todo2 := todoPkg.Todo{Title: "Test Todo 2", Completed: true, UserID: 1}
-	_, err = todoRepo.Create(&todo2)
-	assert.NoError(t, err)
-
+	// リクエストを作成 (💡 JWTトークンをヘッダーに追加)
 	req, _ := http.NewRequest("GET", "/api/todos", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
 
 	// Act: リクエストを実行
@@ -251,15 +285,14 @@ func TestGetTodos_Success(t *testing.T) {
 
 	// Assert: 結果の検証
 	assert.Equal(t, http.StatusOK, w.Code, "Expected HTTP Status Code 200 OK")
-
 	var todos []todoPkg.Todo
 	err = json.Unmarshal(w.Body.Bytes(), &todos)
 	assert.NoError(t, err, "Response should be a valid JSON array")
 	assert.Len(t, todos, 2, "Expected 2 todos in the response")
 
-	// 作成日時で降順にソートされることを期待 (最新のものが最初)
-	assert.Equal(t, "Test Todo 2", todos[0].Title)
-	assert.Equal(t, "Test Todo 1", todos[1].Title)
+	// CreatedAtの新しい順にソートされていることを確認
+	assert.Equal(t, createdTodo2.Title, todos[0].Title, "Expected 'Test Todo 2' to be the first todo")
+	assert.Equal(t, createdTodo1.Title, todos[1].Title, "Expected 'Test Todo 1' to be the second todo")
 }
 
 // ------------------------------------
@@ -273,13 +306,17 @@ func TestGetTodoByID_Success(t *testing.T) {
 	}
 	defer testDB.Close()
 
-	// テスト用のToDoを作成
+	// 💡 ログインしてJWTトークンを取得
+	token := loginAndGetToken(t, r, "normal_user@example.com", "password123")
+
+	// テスト用のToDoを作成 (UserIDも設定)
 	newTodo := todoPkg.Todo{Title: "Specific Todo", Completed: false, UserID: 1}
 	createdTodo, err := todoRepo.Create(&newTodo)
 	assert.NoError(t, err)
 	assert.NotZero(t, createdTodo.ID)
 
 	req, _ := http.NewRequest("GET", fmt.Sprintf("/api/todos/%d", createdTodo.ID), nil)
+	req.Header.Set("Authorization", "Bearer "+token) // 💡 JWTトークンをヘッダーに追加
 	w := httptest.NewRecorder()
 
 	r.ServeHTTP(w, req)
@@ -290,6 +327,7 @@ func TestGetTodoByID_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, createdTodo.ID, responseTodo.ID)
 	assert.Equal(t, "Specific Todo", responseTodo.Title)
+	assert.Equal(t, newTodo.UserID, responseTodo.UserID, "Expected UserID to match") // UserIDのアサーションを追加
 }
 
 func TestGetTodoByID_NotFound(t *testing.T) {
@@ -299,7 +337,11 @@ func TestGetTodoByID_NotFound(t *testing.T) {
 	}
 	defer testDB.Close()
 
+	// 💡 ログインしてJWTトークンを取得
+	token := loginAndGetToken(t, r, "normal_user@example.com", "password123")
+
 	req, _ := http.NewRequest("GET", "/api/todos/99999", nil)
+	req.Header.Set("Authorization", "Bearer "+token) // 💡 JWTトークンをヘッダーに追加
 	w := httptest.NewRecorder()
 
 	r.ServeHTTP(w, req)
@@ -322,6 +364,9 @@ func TestUpdateTodo_Success(t *testing.T) {
 	}
 	defer testDB.Close()
 
+	// 💡 ログインしてJWTトークンを取得
+	token := loginAndGetToken(t, r, "normal_user@example.com", "password123")
+
 	// 更新対象のToDoを作成
 	originalTodo := todoPkg.Todo{Title: "Original Todo", Completed: false, UserID: 1}
 	createdTodo, err := todoRepo.Create(&originalTodo)
@@ -341,6 +386,7 @@ func TestUpdateTodo_Success(t *testing.T) {
 
 	req, _ := http.NewRequest("PUT", fmt.Sprintf("/api/todos/%d", createdTodo.ID), bytes.NewBuffer(jsonValue))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token) // 💡 JWTトークンをヘッダーに追加
 	w := httptest.NewRecorder()
 
 	r.ServeHTTP(w, req)
@@ -352,7 +398,8 @@ func TestUpdateTodo_Success(t *testing.T) {
 	assert.Equal(t, createdTodo.ID, responseTodo.ID)
 	assert.Equal(t, "Updated Todo", responseTodo.Title)
 	assert.True(t, responseTodo.Completed)
-	assert.True(t, responseTodo.UpdatedAt.After(createdTodo.UpdatedAt), "UpdatedAt should be updated after the original CreatedAt") // メッセージを明確化
+	assert.True(t, responseTodo.UpdatedAt.After(createdTodo.UpdatedAt), "UpdatedAt should be updated after the original CreatedAt")
+	assert.Equal(t, originalTodo.UserID, responseTodo.UserID, "Expected UserID to remain the same") // UserIDのアサーションを追加
 }
 
 func TestUpdateTodo_NotFound(t *testing.T) {
@@ -362,8 +409,11 @@ func TestUpdateTodo_NotFound(t *testing.T) {
 	}
 	defer testDB.Close()
 
+	// 💡 ログインしてJWTトークンを取得
+	token := loginAndGetToken(t, r, "normal_user@example.com", "password123")
+
 	updatedData := map[string]interface{}{
-		"title":     "Non Existent",
+		"title":     "Non Existent Todo",
 		"completed": true,
 		"user_id":   1,
 	}
@@ -371,6 +421,7 @@ func TestUpdateTodo_NotFound(t *testing.T) {
 
 	req, _ := http.NewRequest("PUT", "/api/todos/99999", bytes.NewBuffer(jsonValue))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token) // 💡 JWTトークンをヘッダーに追加
 	w := httptest.NewRecorder()
 
 	r.ServeHTTP(w, req)
@@ -393,23 +444,27 @@ func TestDeleteTodo_Success(t *testing.T) {
 	}
 	defer testDB.Close()
 
+	// 💡 ログインしてJWTトークンを取得
+	token := loginAndGetToken(t, r, "normal_user@example.com", "password123")
+
 	// 削除対象のToDoを作成
-	newTodo := todoPkg.Todo{Title: "Todo to delete", Completed: false, UserID: 1}
+	newTodo := todoPkg.Todo{Title: "Todo to Delete", Completed: false, UserID: 1}
 	createdTodo, err := todoRepo.Create(&newTodo)
 	assert.NoError(t, err)
 	assert.NotZero(t, createdTodo.ID)
 
 	req, _ := http.NewRequest("DELETE", fmt.Sprintf("/api/todos/%d", createdTodo.ID), nil)
+	req.Header.Set("Authorization", "Bearer "+token) // 💡 JWTトークンをヘッダーに追加
 	w := httptest.NewRecorder()
 
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNoContent, w.Code)
 
-	// 削除されたことを確認 (再取得でNotFoundになるはず)
+	// 削除されたことを確認
 	_, err = todoRepo.FindByID(createdTodo.ID)
-	assert.Error(t, err)
-	assert.True(t, errors.Is(err, todoPkg.ErrTodoNotFound))
+	assert.Error(t, err, "Expected an error as todo should be deleted")
+	assert.True(t, errors.Is(err, todoPkg.ErrTodoNotFound), "Expected ErrTodoNotFound after deletion")
 }
 
 func TestDeleteTodo_NotFound(t *testing.T) {
@@ -419,7 +474,11 @@ func TestDeleteTodo_NotFound(t *testing.T) {
 	}
 	defer testDB.Close()
 
+	// 💡 ログインしてJWTトークンを取得
+	token := loginAndGetToken(t, r, "normal_user@example.com", "password123")
+
 	req, _ := http.NewRequest("DELETE", "/api/todos/99999", nil)
+	req.Header.Set("Authorization", "Bearer "+token) // 💡 JWTトークンをヘッダーに追加
 	w := httptest.NewRecorder()
 
 	r.ServeHTTP(w, req)
@@ -431,231 +490,232 @@ func TestDeleteTodo_NotFound(t *testing.T) {
 	assert.Contains(t, response["error"], "Todo not found")
 }
 
-// ----------------------------------------------------
-// Step 6: ユーザー登録 (POST /api/register) - グリーンフェーズ
-// ----------------------------------------------------
+// ------------------------------------
+// User Registration Tests (POST /api/register)
+// ------------------------------------
 
-func TestRegisterUser_InvalidInput(t *testing.T) {
-	// Arrange: ルーターの準備
+func TestRegisterUser_Success(t *testing.T) {
 	r, testDB, _, _, err := setupRouter()
 	if err != nil {
 		t.Skipf("Skipping test: Failed to setup router (DB connection required): %v", err)
 	}
 	defer testDB.Close()
 
-	// 不完全なユーザー情報 (パスワードなし)
-	invalidUser := map[string]string{
-		"username": "testuser",
-		"email":    "test@example.com",
-		// "password": "", // 意図的に省略
+	// 新しいユーザー登録データ
+	newUserData := map[string]string{
+		"username": "newuser",
+		"email":    "newuser@example.com",
+		"password": "newpassword",
 	}
-	jsonValue, _ := json.Marshal(invalidUser)
+	jsonValue, _ := json.Marshal(newUserData)
 
 	req, _ := http.NewRequest("POST", "/api/register", bytes.NewBuffer(jsonValue))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	// Act: リクエストを実行
 	r.ServeHTTP(w, req)
 
-	// Assert: 結果の検証
-	assert.Equal(t, http.StatusBadRequest, w.Code, "Expected HTTP Status Code 400 Bad Request for invalid input")
+	assert.Equal(t, http.StatusCreated, w.Code, "Expected HTTP Status Code 201 Created")
 
-	var response map[string]string
-	err = json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err, "Response should be a valid JSON object")
-	assert.Contains(t, response["error"], "Invalid request payload", "Expected error message for invalid payload")
+	var responseUser userPkg.User
+	err = json.Unmarshal(w.Body.Bytes(), &responseUser)
+	assert.NoError(t, err, "Response should be a valid JSON user object")
+	assert.NotZero(t, responseUser.ID, "Expected a non-zero User ID")
+	assert.Equal(t, "newuser", responseUser.Username, "Expected username to match")
+	assert.Equal(t, "newuser@example.com", responseUser.Email, "Expected email to match")
+	assert.Equal(t, "user", responseUser.Role, "Expected default role to be 'user'")
+	assert.Empty(t, responseUser.PasswordHash, "Password hash should not be returned in response")
 }
 
-// ----------------------------------------------------
-// Step 7: ユーザーログイン (POST /api/login) - グリーンフェーズ (修正済み)
-// ----------------------------------------------------
+func TestRegisterUser_InvalidInput(t *testing.T) {
+	r, testDB, _, _, err := setupRouter()
+	if err != nil {
+		t.Skipf("Skipping test: Failed to setup router (DB connection required): %v", err)
+	}
+	defer testDB.Close()
+
+	// 無効な入力 (パスワードなし)
+	invalidUserData := map[string]string{
+		"username": "invaliduser",
+		"email":    "invalid@example.com",
+		// "password": "" // パスワードがない
+	}
+	jsonValue, _ := json.Marshal(invalidUserData)
+
+	req, _ := http.NewRequest("POST", "/api/register", bytes.NewBuffer(jsonValue))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, "Expected HTTP Status Code 400 Bad Request")
+	var response map[string]string
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Contains(t, response["error"], "Invalid request payload", "Expected 'Invalid request payload' error")
+}
+
+func TestRegisterUser_DuplicateEmail(t *testing.T) {
+	r, testDB, _, userRepo, err := setupRouter()
+	if err != nil {
+		t.Skipf("Skipping test: Failed to setup router (DB connection required): %v", err)
+	}
+	defer testDB.Close()
+
+	// 既存のメールアドレスでユーザーを作成
+	existingUser := userPkg.User{
+		Username:     "existing",
+		Email:        "duplicate@example.com",
+		PasswordHash: "hashedpass",
+		Role:         "user",
+	}
+	_, err = userRepo.Create(&existingUser)
+	assert.NoError(t, err)
+
+	// 同じメールアドレスで再度登録を試みる
+	duplicateUserData := map[string]string{
+		"username": "anotheruser",
+		"email":    "duplicate@example.com",
+		"password": "somepassword",
+	}
+	jsonValue, _ := json.Marshal(&duplicateUserData)
+
+	req, _ := http.NewRequest("POST", "/api/register", bytes.NewBuffer(jsonValue))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusConflict, w.Code, "Expected HTTP Status Code 409 Conflict for duplicate email")
+	var response map[string]string
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Contains(t, response["error"], "Username or email already exists", "Expected 'Username or email already exists' error")
+}
+
+// ------------------------------------
+// User Login Tests (POST /api/login)
+// ------------------------------------
 
 func TestLoginUser_Success(t *testing.T) {
-	// Arrange: ルーターの準備
-	r, testDB, _, _, err := setupRouter() // testUserRepo は直接使わないので _ で無視
-	if err != nil {
-		t.Skipf("Skipping test: Failed to setup router (DB connection required): %v", err)
-	}
-	defer testDB.Close()
-
-	// setupTestDB で作成されたユーザーの認証情報を使用
-	loginCredentials := map[string]string{
-		"email":    "normal_user@example.com", // setupTestDB で作成されたユーザーのメールアドレス
-		"password": "password123",            // setupTestDB で作成されたユーザーのパスワード
-	}
-	jsonValue, _ := json.Marshal(loginCredentials)
-
-	req, _ := http.NewRequest("POST", "/api/login", bytes.NewBuffer(jsonValue))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	// Act: リクエストを実行
-	r.ServeHTTP(w, req)
-
-	// Assert: 結果の検証
-	// 💡 期待値: ステータスコード 200 OK (ログイン成功)
-	assert.Equal(t, http.StatusOK, w.Code, "Expected HTTP Status Code 200 OK for successful login")
-
-	var response map[string]string
-	err = json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err, "Response should be a valid JSON object")
-	assert.Contains(t, response, "token", "Expected response to contain a JWT token") // JWTトークンが含まれていることを確認
-	assert.NotEmpty(t, response["token"], "Expected JWT token not to be empty")       // JWTトークンが空でないことを確認
-}
-
-func TestLoginUser_InvalidCredentials(t *testing.T) {
-	// Arrange: ルーターの準備
 	r, testDB, _, _, err := setupRouter()
 	if err != nil {
 		t.Skipf("Skipping test: Failed to setup router (DB connection required): %v", err)
 	}
 	defer testDB.Close()
 
-	// 無効な認証情報 (存在しないユーザー、または間違ったパスワード)
-	invalidCredentials := map[string]string{
-		"email":    "nonexistent@example.com",
-		"password": "wrongpassword",
-	}
-	jsonValue, _ := json.Marshal(invalidCredentials)
-
-	req, _ := http.NewRequest("POST", "/api/login", bytes.NewBuffer(jsonValue))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	// Act: リクエストを実行
-	r.ServeHTTP(w, req)
-
-	// Assert: 結果の検証
-	// 💡 期待値: ステータスコード 401 Unauthorized (認証失敗)
-	assert.Equal(t, http.StatusUnauthorized, w.Code, "Expected HTTP Status Code 401 Unauthorized for invalid credentials")
-
-	var response map[string]string
-	err = json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err, "Response should be a valid JSON object")
-	assert.Contains(t, response["error"], "Invalid credentials", "Expected error message 'Invalid credentials'")
-}
-// ----------------------------------------------------
-// Step 8: 認証ミドルウェア (JWT検証) - レッドフェーズ
-// ----------------------------------------------------
-
-func ProtectedHandler(c *gin.Context) {
-    userID, exists := c.Get("user_id")
-    if !exists {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "User ID not found in context"})
-        return
-    }
-    userEmail, exists := c.Get("user_email")
-    if !exists {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "User email not found in context"})
-        return
-    }
-    userRole, exists := c.Get("user_role")
-    if !exists {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "User role not found in context"})
-        return
-    }
-    c.JSON(http.StatusOK, gin.H{
-        "message": "Access granted",
-        "user_id": userID,
-        "email":   userEmail,
-        "role":    userRole,
-    })
-}
-
-// TestAuthMiddleware_ValidToken を以下のように変更します。
-func TestAuthMiddleware_ValidToken(t *testing.T) {
-	// Arrange: ルーターの準備
-	r, testDB, _, _, err := setupRouter()
-	if err != nil {
-		t.Skipf("Skipping test: Failed to setup router (DB connection required): %v", err)
-	}
-	defer testDB.Close()
-
-	// テストユーザーのログイン (JWTトークンを取得)
+	// 既存ユーザーのログイン情報 (setupTestDBで作成済み)
 	loginCredentials := map[string]string{
 		"email":    "normal_user@example.com",
 		"password": "password123",
 	}
 	jsonValue, _ := json.Marshal(loginCredentials)
 
-	loginReq, _ := http.NewRequest("POST", "/api/login", bytes.NewBuffer(jsonValue))
-	loginReq.Header.Set("Content-Type", "application/json")
-	loginW := httptest.NewRecorder()
-	r.ServeHTTP(loginW, loginReq)
+	req, _ := http.NewRequest("POST", "/api/login", bytes.NewBuffer(jsonValue))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
 
-	assert.Equal(t, http.StatusOK, loginW.Code)
-	var loginResponse map[string]string
-	err = json.Unmarshal(loginW.Body.Bytes(), &loginResponse)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code, "Expected HTTP Status Code 200 OK")
+	var response map[string]string
+	err = json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
-	tokenString, exists := loginResponse["token"]
-	assert.True(t, exists, "Expected JWT token from login response")
-	assert.NotEmpty(t, tokenString, "Expected JWT token not to be empty")
-
-	// 保護されたエンドポイントへのリクエスト
-	protectedReq, _ := http.NewRequest("GET", "/api/protected", nil)
-	protectedReq.Header.Set("Authorization", "Bearer "+tokenString) // 有効なJWTトークンをセット
-	protectedW := httptest.NewRecorder()
-
-	// Act: リクエストを実行
-	r.ServeHTTP(protectedW, protectedReq)
-
-	// Assert: 結果の検証 (💡 200 OK を期待)
-	assert.Equal(t, http.StatusOK, protectedW.Code, "Expected HTTP Status Code 200 OK for valid token")
-	var protectedResponse map[string]interface{} // user_idはfloat64でデコードされる可能性があるのでinterface{}に
-	err = json.Unmarshal(protectedW.Body.Bytes(), &protectedResponse)
-	assert.NoError(t, err)
-	assert.Equal(t, "Access granted", protectedResponse["message"])
-	assert.Equal(t, float64(1), protectedResponse["user_id"], "Expected user_id 1") // normal_userのIDは1
-	assert.Equal(t, "normal_user@example.com", protectedResponse["email"])
-	assert.Equal(t, "user", protectedResponse["role"])
+	assert.Contains(t, response, "token", "Expected response to contain a 'token'")
+	assert.NotEmpty(t, response["token"], "Expected token to be non-empty")
 }
 
-// TestAuthMiddleware_InvalidToken を以下のように変更します。
+func TestLoginUser_InvalidCredentials(t *testing.T) {
+	r, testDB, _, _, err := setupRouter()
+	if err != nil {
+		t.Skipf("Skipping test: Failed to setup router (DB connection required): %v", err)
+	}
+	defer testDB.Close()
+
+	// 存在しないユーザー、または間違ったパスワード
+	loginCredentials := map[string]string{
+		"email":    "nonexistent@example.com",
+		"password": "wrongpassword",
+	}
+	jsonValue, _ := json.Marshal(loginCredentials)
+
+	req, _ := http.NewRequest("POST", "/api/login", bytes.NewBuffer(jsonValue))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code, "Expected HTTP Status Code 401 Unauthorized")
+	var response map[string]string
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Contains(t, response["error"], "Invalid credentials", "Expected 'Invalid credentials' error")
+}
+
+// ------------------------------------
+// AuthMiddleware Tests
+// ------------------------------------
+
+func TestAuthMiddleware_ValidToken(t *testing.T) {
+	r, testDB, _, _, err := setupRouter()
+	if err != nil {
+		t.Skipf("Skipping test: Failed to setup router (DB connection required): %v", err)
+	}
+	defer testDB.Close()
+
+	token := loginAndGetToken(t, r, "normal_user@example.com", "password123")
+
+	req, _ := http.NewRequest("GET", "/api/protected", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, "Access granted", response["message"])
+	assert.Equal(t, float64(1), response["user_id"]) // user_idはfloat64でデコードされる
+	assert.Equal(t, "normal_user@example.com", response["email"])
+	assert.Equal(t, "user", response["role"])
+}
+
 func TestAuthMiddleware_InvalidToken(t *testing.T) {
-	// Arrange: ルーターの準備
 	r, testDB, _, _, err := setupRouter()
 	if err != nil {
 		t.Skipf("Skipping test: Failed to setup router (DB connection required): %v", err)
 	}
 	defer testDB.Close()
 
-	// 保護されたエンドポイントへのリクエスト (無効なJWTトークン)
-	protectedReq, _ := http.NewRequest("GET", "/api/protected", nil)
-	protectedReq.Header.Set("Authorization", "Bearer invalid.jwt.token") // 無効なJWTトークンをセット
-	protectedW := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/protected", nil)
+	req.Header.Set("Authorization", "Bearer invalid.jwt.token") // 不正なトークン
+	w := httptest.NewRecorder()
 
-	// Act: リクエストを実行
-	r.ServeHTTP(protectedW, protectedReq)
+	r.ServeHTTP(w, req)
 
-	// Assert: 結果の検証 (💡 401 Unauthorized を期待)
-	assert.Equal(t, http.StatusUnauthorized, protectedW.Code, "Expected HTTP Status Code 401 Unauthorized for invalid token")
-	var protectedResponse map[string]string
-	err = json.Unmarshal(protectedW.Body.Bytes(), &protectedResponse)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	var response map[string]string
+	err = json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
-	assert.Contains(t, protectedResponse["error"], "Invalid or expired token", "Expected error message for invalid token")
+	assert.Contains(t, response["error"], "Invalid or expired token")
 }
 
-// TestAuthMiddleware_NoToken を以下のように変更します。
 func TestAuthMiddleware_NoToken(t *testing.T) {
-	// Arrange: ルーターの準備
 	r, testDB, _, _, err := setupRouter()
 	if err != nil {
 		t.Skipf("Skipping test: Failed to setup router (DB connection required): %v", err)
 	}
 	defer testDB.Close()
 
-	// 保護されたエンドポイントへのリクエスト (トークンなし)
-	protectedReq, _ := http.NewRequest("GET", "/api/protected", nil)
-	protectedW := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/protected", nil) // トークンなし
+	w := httptest.NewRecorder()
 
-	// Act: リクエストを実行
-	r.ServeHTTP(protectedW, protectedReq)
+	r.ServeHTTP(w, req)
 
-	// Assert: 結果の検証 (💡 401 Unauthorized を期待)
-	assert.Equal(t, http.StatusUnauthorized, protectedW.Code, "Expected HTTP Status Code 401 Unauthorized for no token")
-	var protectedResponse map[string]string
-	err = json.Unmarshal(protectedW.Body.Bytes(), &protectedResponse)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	var response map[string]string
+	err = json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
-	assert.Contains(t, protectedResponse["error"], "Authorization header required", "Expected error message for no token")
+	assert.Contains(t, response["error"], "Authorization header required")
 }

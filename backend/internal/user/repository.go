@@ -2,9 +2,12 @@ package user
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"time"
+
+	"github.com/go-sql-driver/mysql"
 
 	"golang.org/x/crypto/bcrypt" // パスワードのハッシュ化用
 )
@@ -32,13 +35,18 @@ func HashPassword(password string) (string, error) {
 func VerifyPassword(hashedPassword, password string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 }
-
+var ErrDuplicateEmail = errors.New("duplicate email")
 // Create は新しいユーザーをデータベースに挿入します。
 func (r *Repository) Create(u *User) (*User, error) {
 
 	query := "INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)"
 	result, err := r.DB.Exec(query, u.Username, u.Email, u.PasswordHash, u.Role)
 	if err != nil {
+
+				// MySQLの重複エントリーエラーコード1062をチェック
+		if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == 1062 {
+			return nil, ErrDuplicateEmail // カスタムエラーを返す
+		}
 		log.Printf("Failed to insert user: %v", err)
 		return nil, fmt.Errorf("could not insert user: %w", err)
 	}
@@ -75,10 +83,4 @@ func (r *Repository) FindByEmail(email string) (*User, error) {
 		return nil, fmt.Errorf("could not query user: %w", err)
 	}
 	return &u, nil
-}
-
-// VerifyPassword はプレーンテキストのパスワードとハッシュ化されたパスワードを比較します。
-func (r *Repository) VerifyPassword(hashedPassword, password string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
-	return err == nil
 }

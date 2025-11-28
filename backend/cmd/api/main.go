@@ -17,30 +17,17 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 
-	todoPkg "go-next-todo/backend/internal/todo" // パッケージエイリアスを使用
-	userPkg "go-next-todo/backend/internal/user" // 追加: userパッケージをインポート
+	todoPkg "go-next-todo/backend/internal/todo"
+	userPkg "go-next-todo/backend/internal/user"
 )
 
 // DB接続をグローバル（または構造体）に保持するため、db変数とリポジトリ変数を定義
 var db *sql.DB
-var todoRepo *todoPkg.Repository // パッケージエイリアスを使用
-var userRepo *userPkg.Repository // 追加: userリポジトリ変数を定義
+var todoRepo *todoPkg.Repository
+var userRepo *userPkg.Repository
 
 // JWT署名のためのシークレットキー
-var jwtSecret = []byte{}
-
-// InitJWTSecretForTest はテスト目的でjwtSecretを初期化します。
-// これにより、テストでAuthMiddlewareがjwtSecretにアクセスできるようになります。
-func InitJWTSecretForTest() {
-	if len(jwtSecret) == 0 {
-		secret := os.Getenv("JWT_SECRET")
-		if secret == "" {
-			log.Fatal("Fatal: JWT_SECRET environment variable is not set. Please set it in your .env file or test setup.")
-		}
-		jwtSecret = []byte(secret)
-	}
-}
-
+var jwtSecret []byte
 
 // getDSN は環境変数からMySQL接続文字列 (DSN) を構築します。
 func getDSN() string {
@@ -54,192 +41,161 @@ func getDSN() string {
 	port := os.Getenv("DB_PORT")
 	name := os.Getenv("DB_NAME")
 
-	// DSN (Data Source Name) 形式に整形
-	// parseTime=true: MySQLのDATETIME/TIMESTAMPをtime.Timeに自動変換
-	// 例: user:pass@tcp(db:3306)/dbname?parseTime=true
 	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", user, pass, host, port, name)
 }
 
 // initDB はデータベース接続を初期化します。
 func initDB() {
 	dsn := getDSN()
-
-	// DB接続を開く
 	var err error
-	// データベースドライバに "mysql" を指定
 	db, err = sql.Open("mysql", dsn)
 	if err != nil {
 		log.Fatalf("Fatal: Failed to open database connection: %v", err)
 	}
-
-	// DBへの接続設定（プールサイズや接続時間を設定）
 	db.SetMaxOpenConns(25)
 	db.SetMaxIdleConns(25)
 	db.SetConnMaxLifetime(5 * time.Minute)
-
-	// 実際にDBに接続できているかPingで確認
 	if err := db.Ping(); err != nil {
 		log.Fatalf("Fatal: Failed to ping database: %v", err)
 	}
-
 	log.Println("Successfully connected to MySQL database!")
 }
 
 // createTodoHandler は新しいToDoタスクを作成し、DBに保存します。
-func createTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
-	var newTodo todoPkg.Todo // パッケージエイリアスを使用
-
-	// 1. リクエストボディのJSONを構造体にバインド（バリデーションも実行）
+func createTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) { // 💡 引数としてrepoを受け取る
+	var newTodo todoPkg.Todo
 	if err := c.ShouldBindJSON(&newTodo); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload", "details": err.Error()})
 		return
 	}
 
-	// 2. リポジトリ層を呼び出してDBに挿入
+		// AuthMiddlewareでセットされたuser_idを取得
+	// AuthMiddlewareはJWTトークンが有効な場合にのみc.Set("user_id", int(userID)) を実行するため、
+	// ここではエラーチェックは不要だが、型アサーションの安全性を考慮する
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		// user_idがコンテキストに存在しない場合（ミドルウェアが正しく動作していないか、ルート保護がない場合）
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
+		return
+	}
+	userID, ok := userIDVal.(int)
+	if !ok {
+		// user_idがint型でない場合（型アサーション失敗）
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID type in context"})
+		return
+	}
+
+	// 取得したuser_idをnewTodoにセット
+	newTodo.UserID = userID
 	createdTodo, err := todoRepo.Create(&newTodo)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save todo to database", "details": err.Error()})
 		return
 	}
-
-	// 3. 201 Created ステータスと作成されたオブジェクトを返す
 	c.JSON(http.StatusCreated, createdTodo)
 }
 
 // getTodoByIDHandler は指定されたIDのToDoタスクを取得します。
-func getTodoByIDHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
-	// パラメータからIDを取得
+func getTodoByIDHandler(c *gin.Context, todoRepo *todoPkg.Repository) { // 💡 引数としてrepoを受け取る
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
 		return
 	}
-
-	// リポジトリ層を呼び出してDBから取得
 	foundTodo, err := todoRepo.FindByID(id)
 	if err != nil {
-		// TODOが見つからない場合
-		if errors.Is(err, todoPkg.ErrTodoNotFound) { // パッケージエイリアスを使用
+		if errors.Is(err, todoPkg.ErrTodoNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Todo not found"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch todo from database", "details": err.Error()})
 		return
 	}
-
-	// 200 OK ステータスと取得したオブジェクトを返す
 	c.JSON(http.StatusOK, foundTodo)
 }
 
 // updateTodoHandler は指定されたIDのToDoタスクを更新します。
-func updateTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
-	// パラメータからIDを取得
+func updateTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) { // 💡 引数としてrepoを受け取る
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
 		return
 	}
-
-	// リクエストボディのJSONを構造体にバインド
-	var updateTodo todoPkg.Todo // パッケージエイリアスを使用
+	var updateTodo todoPkg.Todo
 	if err := c.ShouldBindJSON(&updateTodo); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload", "details": err.Error()})
 		return
 	}
-
-	// リポジトリ層を呼び出してDBを更新
 	updatedTodo, err := todoRepo.Update(id, &updateTodo)
 	if err != nil {
-		// TODOが見つからない場合
-		if errors.Is(err, todoPkg.ErrTodoNotFound) { // パッケージエイリアスを使用
+		if errors.Is(err, todoPkg.ErrTodoNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Todo not found"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update todo in database", "details": err.Error()})
 		return
 	}
-
-	// 200 OK ステータスと更新されたオブジェクトを返す
 	c.JSON(http.StatusOK, updatedTodo)
 }
 
 // deleteTodoHandler は指定されたIDのToDoタスクを削除します。
-func deleteTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
-	// パラメータからIDを取得
+func deleteTodoHandler(c *gin.Context, todoRepo *todoPkg.Repository) { // 💡 引数としてrepoを受け取る
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
 		return
 	}
-
-	// リポジトリ層を呼び出してDBから削除
 	err = todoRepo.Delete(id)
 	if err != nil {
-		// TODOが見つからない場合
-		if errors.Is(err, todoPkg.ErrTodoNotFound) { // パッケージエイリアスを使用
+		if errors.Is(err, todoPkg.ErrTodoNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Todo not found"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete todo from database", "details": err.Error()})
 		return
 	}
-
-	// 204 No Content ステータスを返す
 	c.Status(http.StatusNoContent)
 }
 
 // getTodosHandler はすべてのToDoタスクを取得します。
-func getTodosHandler(c *gin.Context, todoRepo *todoPkg.Repository) {
-	// リポジトリ層を呼び出してDBから取得
+func getTodosHandler(c *gin.Context, todoRepo *todoPkg.Repository) { // 💡 引数としてrepoを受け取る
 	todos, err := todoRepo.FindAll()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch todos from database", "details": err.Error()})
 		return
 	}
-
-	// 200 OK ステータスと取得したオブジェクトの配列を返す
 	c.JSON(http.StatusOK, todos)
 }
 
 // registerHandler はユーザー登録ハンドラー
-func registerHandler(c *gin.Context, userRepo *userPkg.Repository) {
-	var req userPkg.UserRegisterRequest// userPkg.User を使用
+func registerHandler(c *gin.Context, userRepo *userPkg.Repository) { // 💡 引数としてrepoを受け取る
+	var req userPkg.UserRegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload", "details": err.Error()})
 		return
 	}
-	// 💡 req.Username, req.Email, req.Password を使用
-	// バリデーションは ShouldBindJSON の binding タグでカバーされるが、
-	// 明示的なチェックも残しておく (特にパスワードのmin=8など)
 	if req.Username == "" || req.Email == "" || req.Password == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Username, email, and password are required"})
 		return
 	}
-
-
-	// パスワードをハッシュ化
 	hashedPassword, err := userPkg.HashPassword(req.Password)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password", "details": err.Error()})
 		return
 	}
-           // パスワードハッシュが格納されたので、元のパスワードはクリア
-	// 新しいユーザーを作成
 	newUser := userPkg.User{
 		Username:     req.Username,
 		Email:        req.Email,
 		PasswordHash: hashedPassword,
-		Role:         "user", // デフォルトロール
+		Role:         "user",
 	}
-
-	// ユーザーをデータベースに保存
 	createdUser, err := userRepo.Create(&newUser)
 	if err != nil {
-		// エラーの種類に応じて適切なステータスを返す
-		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, fmt.Errorf("could not insert user: Error 1062 (23000): Duplicate entry")) { // 重複エントリーのハンドリングを改善
+		// userPkg.ErrDuplicateEmail をチェックする
+		if errors.Is(err, userPkg.ErrDuplicateEmail) {
 			c.JSON(http.StatusConflict, gin.H{"error": "Username or email already exists"})
 			return
 		}
@@ -247,57 +203,63 @@ func registerHandler(c *gin.Context, userRepo *userPkg.Repository) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user", "details": err.Error()})
 		return
 	}
-
-	// パスワードハッシュはレスポンスに含めない
 	createdUser.PasswordHash = ""
 	c.JSON(http.StatusCreated, createdUser)
 }
 
 // loginHandler はユーザーログインを処理し、成功した場合はJWTを返します。
-func loginHandler(c *gin.Context, userRepo *userPkg.Repository) {
+func loginHandler(c *gin.Context, userRepo *userPkg.Repository) { // 💡 引数としてrepoを受け取る
 	var req userPkg.UserLoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload", "details": err.Error()})
 		return
 	}
-
-	// 1. メールアドレスでユーザーを検索
 	user, err := userRepo.FindByEmail(req.Email)
 	if err != nil {
-		// ユーザーが見つからない場合や、その他のDBエラー
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
-
-	// 2. パスワードの検証
 	if err := userPkg.VerifyPassword(user.PasswordHash, req.Password); err != nil {
-		// パスワードが一致しない場合
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
-
-	// 3. JWTの生成
 	claims := jwt.MapClaims{
 		"user_id": user.ID,
 		"email":   user.Email,
 		"role":    user.Role,
-		"exp":     time.Now().Add(time.Hour * 24).Unix(), // 24時間有効期限
+		"exp":     time.Now().Add(time.Hour * 24).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
 	tokenString, err := token.SignedString(jwtSecret)
 	if err != nil {
 		log.Printf("Failed to sign JWT token: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
 	}
-
-	// 4. トークンをクライアントに返す
 	c.JSON(http.StatusOK, gin.H{"token": tokenString})
 }
 
+// helloHandler はシンプルなヘルスチェックエンドポイントです。
+func helloHandler(c *gin.Context) { // 💡 引数はGin Contextのみ
+	c.JSON(http.StatusOK, gin.H{"message": "Hello from Go Backend!"})
+}
+
+// dbCheckHandler はデータベース接続の健全性を確認します。
+func dbCheckHandler(c *gin.Context, db *sql.DB) { // 💡 引数としてdbを受け取る
+	if err := db.Ping(); err != nil {
+		log.Printf("DB Ping failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Database connection failed",
+			"error":   err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "Database connection is healthy"})
+}
+
 // AuthMiddleware はJWTトークンを検証し、ユーザー情報をコンテキストに設定するミドルウェアです。
-func AuthMiddleware() gin.HandlerFunc {
+func AuthMiddleware() gin.HandlerFunc { // 💡 引数はGin Contextのみ
 	return func(c *gin.Context) {
 		tokenString := c.GetHeader("Authorization")
 		if tokenString == "" {
@@ -305,32 +267,25 @@ func AuthMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-
-		// "Bearer " プレフィックスを削除
 		if len(tokenString) < 7 || tokenString[:7] != "Bearer " {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token format"})
 			c.Abort()
 			return
 		}
 		tokenString = tokenString[7:]
-
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			// アルゴリズムがHMACであることを確認
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, jwt.ErrSignatureInvalid
 			}
 			return jwtSecret, nil
 		})
-
 		if err != nil {
 			log.Printf("JWT parse error: %v", err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
 			c.Abort()
 			return
 		}
-
 		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-			// claimsからユーザー情報を取得
 			userID, ok := claims["user_id"].(float64)
 			if !ok {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "User ID not found in token claims"})
@@ -349,12 +304,10 @@ func AuthMiddleware() gin.HandlerFunc {
 				c.Abort()
 				return
 			}
-
-			// Ginコンテキストにユーザー情報を設定
-			c.Set("user_id", int(userID)) // float64からintにキャスト
+			c.Set("user_id", int(userID))
 			c.Set("user_email", userEmail)
 			c.Set("user_role", userRole)
-			c.Next() // 次のハンドラに進む
+			c.Next()
 		} else {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
 			c.Abort()
@@ -363,81 +316,78 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-// helloHandler はシンプルなヘルスチェックエンドポイントです。
-func helloHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Hello from Go Backend!"})
+// ProtectedHandler は認証ミドルウェアのテストで使用されるダミーの保護されたエンドポイントです。
+func ProtectedHandler(c *gin.Context) { // 💡 引数はGin Contextのみ
+    userID, exists := c.Get("user_id")
+    if !exists {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "User ID not found in context"})
+        return
+    }
+    userEmail, exists := c.Get("user_email")
+    if !exists {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "User email not found in token claims"})
+        return
+    }
+    userRole, exists := c.Get("user_role")
+    if !exists {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "User role not found in token claims"})
+        return
+    }
+    c.JSON(http.StatusOK, gin.H{
+        "message": "Access granted",
+        "user_id": userID,
+        "email":   userEmail,
+        "role":    userRole,
+    })
 }
 
-// dbCheckHandler はデータベース接続の健全性を確認します。
-func dbCheckHandler(c *gin.Context, db *sql.DB) {
-	// PingでDB接続をチェック
-	if err := db.Ping(); err != nil {
-		log.Printf("DB Ping failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Database connection failed",
-			"error":   err.Error(),
-		})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "Database connection is healthy"})
+// InitJWTSecretForTest はテスト用にjwtSecretを初期化します。
+// main_test.go から呼び出されることを想定しています。
+func InitJWTSecretForTest() {
+	jwtSecret = []byte(os.Getenv("JWT_SECRET"))
 }
+
 
 func main() {
-	// .env ファイルの読み込み (initDB() の中にもあるが、ここでも安全策として読み込む)
-	err := godotenv.Load("../../../.env") // ルート直下の .env を指定
+	err := godotenv.Load("../../../.env")
 	if err != nil {
 		log.Printf("Error loading .env file (this is fine if using explicit env vars): %v", err)
 	}
-	if os.Getenv("JWT_SECRET") == "" { // 💡 ここでjwtSecretが初期化される
+	if os.Getenv("JWT_SECRET") == "" {
 		log.Fatal("Fatal: JWT_SECRET environment variable is not set. Please set it in your .env file.")
 	}
-	jwtSecret = []byte(os.Getenv("JWT_SECRET")) //
-	// 1. データベース接続の初期化
-	initDB()
+	jwtSecret = []byte(os.Getenv("JWT_SECRET"))
 
-	// 2. リポジトリの初期化
-	todoRepo = todoPkg.NewRepository(db) // パッケージエイリアスを使用
-	userRepo = userPkg.NewRepository(db) // 追加: userリポジトリの初期化
+	initDB()
+	todoRepo = todoPkg.NewRepository(db)
+	userRepo = userPkg.NewRepository(db)
 
 	r := gin.Default()
 
-	// ------------------------------------
-	// 💡 CORS設定をルーターに適用
-	// ------------------------------------
 	config := cors.DefaultConfig()
-	// Next.js (http://localhost:3000) からのアクセスを許可
 	config.AllowOrigins = []string{"http://localhost:3000"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	// 認証情報を伴うリクエストのために'Authorization'ヘッダーを許可リストに追加
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"} // 'Authorization'を追加
-
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
 	r.Use(cors.New(config))
 
 	// ルーティングの設定 (クロージャを使用してリポジトリをハンドラーに注入)
 	r.GET("/api/hello", helloHandler)
 	r.GET("/api/dbcheck", func(c *gin.Context) { dbCheckHandler(c, db) })
+	r.POST("/api/register", func(c *gin.Context) { registerHandler(c, userRepo) })
+	r.POST("/api/login", func(c *gin.Context) { loginHandler(c, userRepo) })
 
-	// 💡 追加: 認証が必要なルートグループ
 	authorized := r.Group("/")
-	authorized.Use(AuthMiddleware()) // 認証ミドルウェアを適用
+	authorized.Use(AuthMiddleware())
 	{
-		// TODO関連APIを認証グループに追加
 		authorized.GET("/api/todos", func(c *gin.Context) { getTodosHandler(c, todoRepo) })
 		authorized.GET("/api/todos/:id", func(c *gin.Context) { getTodoByIDHandler(c, todoRepo) })
 		authorized.POST("/api/todos", func(c *gin.Context) { createTodoHandler(c, todoRepo) })
 		authorized.PUT("/api/todos/:id", func(c *gin.Context) { updateTodoHandler(c, todoRepo) })
 		authorized.DELETE("/api/todos/:id", func(c *gin.Context) { deleteTodoHandler(c, todoRepo) })
+		authorized.GET("/api/protected", ProtectedHandler) // テスト用
 	}
 
-	// 💡 追加: ユーザー関連エンドポイント
-	r.POST("/api/register", func(c *gin.Context) { registerHandler(c, userRepo) }) // ユーザー登録
-	r.POST("/api/login", func(c *gin.Context) { loginHandler(c, userRepo) })       // ユーザーログイン
-
-	// サーバー起動
 	log.Println("Server listening on port 8080...")
-	// main関数を抜ける際にDB接続を閉じる (但し、ウェブサーバーなので通常は閉じない)
-	// defer db.Close()
 	if err := r.Run(":8080"); err != nil {
 		log.Fatal(err)
 	}

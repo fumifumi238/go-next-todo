@@ -15,7 +15,6 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/assert"
 
 	"go-next-todo/backend/internal/todo"
@@ -24,10 +23,6 @@ import (
 
 // setupTestDB はテスト用のデータベース接続を確立し、テーブルを作成し、テストデータを投入します。
 func setupTestDB(t *testing.T) (*sql.DB, *gin.Engine, *todo.Repository, *user.Repository) {
-	err := godotenv.Load("../../../.env") // ルート直下の .env を指定
-	if err != nil {
-		log.Printf("Warning: Could not load .env file for tests: %v", err)
-	}
 
 	dbUser := os.Getenv("TEST_DB_USER")
 	dbPass := os.Getenv("TEST_DB_PASS")

@@ -25,8 +25,6 @@ func initJWTSecret() {
 		log.Fatal("JWT_SECRET environment variable not set")
 	}
 	jwtSecret = []byte(secret)
-	// ここに出力されるログを確認してください
-	log.Printf("DEBUG: initJWTSecret initialized with length %d bytes. First 10 bytes: %x", len(jwtSecret), jwtSecret[:min(10, len(jwtSecret))])
 
 }
 

@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Todo } from './lib/types/todo';
-import { fetchTodos } from './lib/api/todo';
-import TodoForm from './components/todo/TodoForm';
-import TodoList from './components/todo/TodoList';
+import { Todo } from '@/app/types/todo';
+import { fetchTodos } from '@/lib/api/todo';
+import TodoForm from '@/components/todo/TodoForm';
+import TodoList from '@/components/todo/TodoList';
 
 
 

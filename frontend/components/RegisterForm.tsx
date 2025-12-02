@@ -14,6 +14,7 @@ const RegisterForm: React.FC = () => {
     formState: { errors, isSubmitting, touchedFields }, // touchedFields を追加
     setError,
     reset,
+    watch,
   } = useForm<RegisterFormInputs>({
     resolver: zodResolver(registerSchema),
     mode: "onChange",
@@ -23,7 +24,10 @@ const RegisterForm: React.FC = () => {
     try {
       const result = await registerUser(data);
       if (result.error) {
-        setError("root.serverError", { type: "manual", message: result.error });
+        setError("root.serverError", {
+          type: "manual",
+          message: result.error,
+        });
         console.error("登録エラー:", result.error);
       } else {
         alert("ユーザー登録が成功しました！");
@@ -39,7 +43,7 @@ const RegisterForm: React.FC = () => {
   };
 
   // 各フィールドの状態を判断するためのヘルパー関数
-  const getFieldStateClass = (fieldName: keyof RegisterFormInputs) => {
+  const getFieldStateclassName = (fieldName: keyof RegisterFormInputs) => {
     if (touchedFields[fieldName]) {
       if (errors[fieldName]) {
         return "border-red-500 focus:ring-red-500 focus:border-red-500";
@@ -48,13 +52,51 @@ const RegisterForm: React.FC = () => {
     }
     return "border-gray-300 focus:ring-indigo-500 focus:border-indigo-500";
   };
-
   const getIcon = (fieldName: keyof RegisterFormInputs) => {
-    if (!touchedFields[fieldName]) return null;
+    console.log(
+      `getIcon called for ${fieldName}: touchedFields[${fieldName}]=`,
+      touchedFields[fieldName],
+      `errors[${fieldName}]=`,
+      errors[fieldName]
+    );
+    if (!touchedFields[fieldName]) {
+      console.log(`getIcon for ${fieldName}: Not touched, returning null`);
+      return null;
+    }
     if (errors[fieldName]) {
+      console.log(
+        `getIcon for ${fieldName}: Error present, returning FaTimesCircle`
+      );
       return <FaTimesCircle className="text-red-500" />;
     }
+    console.log(`getIcon for ${fieldName}: No error, returning FaCheckCircle`);
     return <FaCheckCircle className="text-green-500" />;
+  };
+
+  const renderFieldStatus = (field: keyof RegisterFormInputs) => {
+    const value = watch(field); // 現在の入力値を取得
+    const error = errors[field]?.message; // バリデーションエラー
+
+    // 未入力なら何も表示しない
+    if (!value) return <div className="min-h-6 mt-1" />;
+
+    // エラーがあれば赤
+    if (error) {
+      return (
+        <div className="min-h-6 mt-1 flex items-center gap-1">
+          <FaTimesCircle className="text-red-500" />
+          <p className="text-sm text-red-600">{error}</p>
+        </div>
+      );
+    }
+
+    // 入力があってエラーがない → 緑
+    return (
+      <div className="min-h-6 mt-1 flex items-center gap-1">
+        <FaCheckCircle className="text-green-500" />
+        <p className="text-sm text-green-600">OK</p>
+      </div>
+    );
   };
 
   return (
@@ -62,99 +104,60 @@ const RegisterForm: React.FC = () => {
       onSubmit={handleSubmit(onSubmit)}
       className="space-y-4 max-w-md mx-auto p-4 border rounded shadow-lg">
       <div className="relative">
-        {" "}
-        {/* relative を追加 */}
         <label
           htmlFor="username"
           className="block text-sm font-medium text-gray-700">
           ユーザー名
         </label>
-        <input
-          id="username"
-          type="text"
-          {...register("username")}
-          className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm outline-none ${getFieldStateClass(
-            "username"
-          )}`}
-        />
-        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pt-6">
-          {" "}
-          {/* アイコンのコンテナ */}
-          {getIcon("username")}
+        <div className="mt-1 relative rounded-md shadow-sm">
+          <input
+            id="username"
+            type="text"
+            {...register("username")}
+            className={`block w-full pl-10 pr-3 py-2 border rounded-md outline-none ${getFieldStateclassName(
+              "username"
+            )}`} // ここで pl-10 を追加
+          />
         </div>
-        <div className="min-h-6">
-          {" "}
-          {/* エラーメッセージの高さ固定 */}
-          {errors.username && (
-            <p className="mt-1 text-sm text-red-600">
-              {errors.username.message}
-            </p>
-          )}
-        </div>
+        {renderFieldStatus("username")}
       </div>
-
       <div className="relative">
-        {" "}
-        {/* relative を追加 */}
         <label
           htmlFor="email"
           className="block text-sm font-medium text-gray-700">
           メールアドレス
         </label>
-        <input
-          id="email"
-          type="email"
-          {...register("email")}
-          className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm outline-none ${getFieldStateClass(
-            "email"
-          )}`}
-        />
-        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pt-6">
-          {" "}
-          {/* アイコンのコンテナ */}
-          {getIcon("email")}
+        <div className="mt-1 relative rounded-md shadow-sm">
+          <input
+            id="email"
+            type="email"
+            {...register("email")}
+            className={`block w-full pl-10 pr-3 py-2 border rounded-md outline-none ${getFieldStateclassName(
+              "email"
+            )}`} // ここで pl-10 を追加
+          />
         </div>
-        <div className="min-h-6">
-          {" "}
-          {/* エラーメッセージの高さ固定 */}
-          {errors.email && (
-            <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
-          )}
-        </div>
+        {renderFieldStatus("email")}
       </div>
 
       <div className="relative">
-        {" "}
-        {/* relative を追加 */}
         <label
           htmlFor="password"
           className="block text-sm font-medium text-gray-700">
           パスワード
         </label>
-        <input
-          id="password"
-          type="password"
-          {...register("password")}
-          className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm outline-none ${getFieldStateClass(
-            "password"
-          )}`}
-        />
-        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pt-6">
-          {" "}
-          {/* アイコンのコンテナ */}
-          {getIcon("password")}
+        <div className="mt-1 relative rounded-md shadow-sm">
+          <input
+            id="password"
+            type="password"
+            {...register("password")}
+            className={`block w-full pl-10 pr-3 py-2 border rounded-md outline-none ${getFieldStateclassName(
+              "password"
+            )}`} // ここで pl-10 を追加
+          />
         </div>
-        <div className="min-h-6">
-          {" "}
-          {/* エラーメッセージの高さ固定 */}
-          {errors.password && (
-            <p className="mt-1 text-sm text-red-600">
-              {errors.password.message}
-            </p>
-          )}
-        </div>
+        {renderFieldStatus("password")}
       </div>
-
       <button
         type="submit"
         disabled={isSubmitting}

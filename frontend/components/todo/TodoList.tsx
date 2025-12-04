@@ -1,7 +1,7 @@
 'use client';
 
 import { Todo } from '@/app/types/todo';
-import { updateTodo, deleteTodo } from '../../lib/api/todo';
+import { updateTodo, deleteTodo } from "@/lib/api/todo";
 
 interface TodoListProps {
   todos: Todo[];

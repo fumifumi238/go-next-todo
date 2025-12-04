@@ -28,9 +28,14 @@ export type RegisterFormInputs = z.infer<typeof registerSchema>;
 
 // ユーザーログインリクエストのZodスキーマ (将来的に使用)
 export const loginSchema = z.object({
-  email: z.email({ message: "有効なメールアドレスを入力してください" }),
-  password: z.string().min(8, "パスワードは8文字以上である必要があります"),
+  email: z
+    .string()
+    .email({ message: "有効なメールアドレスを入力してください" })
+    .max(255, { message: "メールアドレスは255文字以下で入力してください" }),
+  password: z
+    .string()
+    .min(1, { message: "パスワードを入力してください" }) // ログイン時は最小文字数のバリデーションは不要な場合が多い
+    .max(100, { message: "パスワードは100文字以下で入力してください" }),
 });
-
 // ユーザーログインリクエストの型定義
 export type LoginFormInputs = z.infer<typeof loginSchema>;

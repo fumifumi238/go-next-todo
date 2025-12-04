@@ -4,10 +4,10 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -96,192 +96,243 @@ func TestCreateTodo_AuthenticatedUserSuccess(t *testing.T) {
 	require.Equal(t, createdTodo.Completed, dbTodo.Completed)
 }
 
-func TestGetTodos_Success(t *testing.T) {
-	db, r, todoRepo, _ := setupTestDB(t)
+func TestGetTodosHandler_Authorization(t *testing.T) {
+	// データベースとルーターをセットアップ
+	db, router, _, _ := setupTestDB(t) // todoRepo を使用
 	defer db.Close()
 
-	token, err := loginAndGetToken(t, r, "normal_user@example.com", "password123")
+	// setupTestDB で既に 'normal_user@example.com' と 'admin@example.com' が作成されている前提
+	// これらのユーザーでログインしてトークンを取得
+	tokenNormal, err := loginAndGetToken(t, router, "normal_user@example.com", "password123") // t を追加
+	require.NoError(t, err)
+	tokenAdmin, err := loginAndGetToken(t, router, "admin@example.com", "adminpass") // t を追加
 	require.NoError(t, err)
 
-	todo1 := &todo.Todo{UserID: 1, Title: "Test Todo 1", Completed: false}
-	todo2 := &todo.Todo{UserID: 1, Title: "Test Todo 2", Completed: true}
-	createdTodo1, err := todoRepo.Create(todo1)
-	assert.NoError(t, err)
-	time.Sleep(2 * time.Second)
-	createdTodo2, err := todoRepo.Create(todo2)
-	assert.NoError(t, err)
+	// ノーマルユーザーのTODOを作成
+	todo1 := createTestTodo(t, router, tokenNormal, "Normal User Todo 1", false)
+	todo2 := createTestTodo(t, router, tokenNormal, "Normal User Todo 2", true)
 
-	req, _ := http.NewRequest("GET", "/api/todos", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
-	w := httptest.NewRecorder()
+	// 管理者ユーザーのTODOを作成 (テストのために作成)
+	_ = createTestTodo(t, router, tokenAdmin, "Admin User Todo 1", false)
 
-	r.ServeHTTP(w, req)
+	// --- Test Case 1: ノーマルユーザーが自分のTODOをすべて取得できること ---
+	t.Run("Normal user can get their own todos", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, "/api/todos", nil)
+		req.Header.Set("Authorization", "Bearer "+tokenNormal)
+		resp := httptest.NewRecorder()
+		router.ServeHTTP(resp, req)
 
-	assert.Equal(t, http.StatusOK, w.Code, "Expected HTTP Status Code 200 OK")
-	var todos []todo.Todo
-	err = json.Unmarshal(w.Body.Bytes(), &todos)
-	assert.NoError(t, err, "Response should be a valid JSON array")
-	assert.Len(t, todos, 2, "Expected 2 todos in the response")
+		require.Equal(t, http.StatusOK, resp.Code)
 
-	assert.Equal(t, createdTodo2.Title, todos[0].Title, "Expected 'Test Todo 2' to be the first todo")
-	assert.Equal(t, createdTodo1.Title, todos[1].Title, "Expected 'Test Todo 1' to be the second todo")
+		var todos []*todo.Todo
+		err := json.Unmarshal(resp.Body.Bytes(), &todos)
+		require.NoError(t, err)
+		require.Len(t, todos, 2) // 自分のTODOが2つ
+		require.Contains(t, []string{todos[0].Title, todos[1].Title}, todo1.Title)
+		require.Contains(t, []string{todos[0].Title, todos[1].Title}, todo2.Title)
+	})
+
+	// --- Test Case 2: 管理者ユーザーがすべてのTODOを取得できること ---
+	t.Run("Admin user can get all todos", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, "/api/todos", nil)
+		req.Header.Set("Authorization", "Bearer "+tokenAdmin)
+		resp := httptest.NewRecorder()
+		router.ServeHTTP(resp, req)
+
+		require.Equal(t, http.StatusOK, resp.Code)
+
+		var todos []*todo.Todo
+		err := json.Unmarshal(resp.Body.Bytes(), &todos)
+		require.NoError(t, err)
+		require.Len(t, todos, 3) // 全体のTODOが3つ
+	})
+
+	// --- Test Case 3: 認証されていないユーザーがTODOを取得できないこと ---
+	t.Run("Unauthorized user cannot get todos", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, "/api/todos", nil)
+		resp := httptest.NewRecorder()
+		router.ServeHTTP(resp, req)
+
+		require.Equal(t, http.StatusUnauthorized, resp.Code)
+	})
 }
 
-func TestGetTodoByID_Success(t *testing.T) {
-	db, r, todoRepo, _ := setupTestDB(t)
+func TestGetTodoByIDHandler_Authorization(t *testing.T) {
+	db, router, _, userRepo := setupTestDB(t)
+
 	defer db.Close()
 
-	token, err := loginAndGetToken(t, r, "normal_user@example.com", "password123")
+	// setupTestDB で作成されたユーザーを使用
+	// ログインしてトークンを取得
+	tokenNormal, err := loginAndGetToken(t, router, "normal_user@example.com", "password123")
+	require.NoError(t, err)
+	tokenAdmin, err := loginAndGetToken(t, router, "admin@example.com", "adminpass")
 	require.NoError(t, err)
 
-	newTodo := todo.Todo{Title: "Specific Todo", Completed: false, UserID: 1}
-	createdTodo, err := todoRepo.Create(&newTodo)
-	assert.NoError(t, err)
-	assert.NotZero(t, createdTodo.ID)
+	// 別のユーザーを作成してそのトークンを取得
+	_ = createTestUser(t, userRepo, "otheruser_for_id", "other_for_id@example.com", "password123", "user")
+	tokenOther, err := loginAndGetToken(t, router, "other_for_id@example.com", "password123")
+	require.NoError(t, err)
 
-	req, _ := http.NewRequest("GET", fmt.Sprintf("/api/todos/%d", createdTodo.ID), nil)
-	req.Header.Set("Authorization", "Bearer "+token)
-	w := httptest.NewRecorder()
+	todoNormalUser := createTestTodo(t, router, tokenNormal, "Normal User Todo", false)
+	todoOtherUser := createTestTodo(t, router, tokenOther, "Other User Todo", false)
 
-	r.ServeHTTP(w, req)
+	// --- Test Case 1: 自分のTODOは取得できること ---
+	t.Run("User can get their own todo by ID", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("/api/todos/%d", todoNormalUser.ID), nil)
+		req.Header.Set("Authorization", "Bearer "+tokenNormal)
+		resp := httptest.NewRecorder()
+		router.ServeHTTP(resp, req)
 
-	assert.Equal(t, http.StatusOK, w.Code)
-	var responseTodo todo.Todo
-	err = json.Unmarshal(w.Body.Bytes(), &responseTodo)
-	assert.NoError(t, err)
-	assert.Equal(t, createdTodo.ID, responseTodo.ID)
-	assert.Equal(t, "Specific Todo", responseTodo.Title)
-	assert.Equal(t, newTodo.UserID, responseTodo.UserID, "Expected UserID to match")
+		require.Equal(t, http.StatusOK, resp.Code)
+		var fetchedTodo todo.Todo
+		err := json.Unmarshal(resp.Body.Bytes(), &fetchedTodo)
+		require.NoError(t, err)
+		require.Equal(t, todoNormalUser.ID, fetchedTodo.ID)
+	})
+
+	// --- Test Case 2: 他人のTODOは取得できないこと ---
+	t.Run("User cannot get another user's todo by ID", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("/api/todos/%d", todoOtherUser.ID), nil)
+		req.Header.Set("Authorization", "Bearer "+tokenNormal) // NormalユーザーがOtherユーザーのTODOにアクセス
+		resp := httptest.NewRecorder()
+		router.ServeHTTP(resp, req)
+
+		require.Equal(t, http.StatusForbidden, resp.Code)
+	})
+
+	// --- Test Case 3: 管理者は他人のTODOも取得できること ---
+	t.Run("Admin can get any user's todo by ID", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("/api/todos/%d", todoOtherUser.ID), nil)
+		req.Header.Set("Authorization", "Bearer "+tokenAdmin)
+		resp := httptest.NewRecorder()
+		router.ServeHTTP(resp, req)
+
+		require.Equal(t, http.StatusOK, resp.Code)
+		var fetchedTodo todo.Todo
+		err := json.Unmarshal(resp.Body.Bytes(), &fetchedTodo)
+		require.NoError(t, err)
+		require.Equal(t, todoOtherUser.ID, fetchedTodo.ID)
+	})
 }
 
-func TestGetTodoByID_NotFound(t *testing.T) {
-	db, r, _, _ := setupTestDB(t)
+func TestUpdateTodoHandler_Authorization(t *testing.T) {
+	db, router, _, userRepo := setupTestDB(t)
 	defer db.Close()
 
-	token, err := loginAndGetToken(t, r, "normal_user@example.com", "password123")
+	tokenNormal, err := loginAndGetToken(t, router, "normal_user@example.com", "password123")
+	require.NoError(t, err)
+	tokenAdmin, err := loginAndGetToken(t, router, "admin@example.com", "adminpass")
 	require.NoError(t, err)
 
-	req, _ := http.NewRequest("GET", "/api/todos/99999", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
-	w := httptest.NewRecorder()
+	otherUser := createTestUser(t, userRepo, "otheruser_for_update", "other_for_update@example.com", "password123", "user")
+	tokenOther, err := loginAndGetToken(t, router, "other_for_update@example.com", "password123")
+	require.NoError(t, err)
 
-	r.ServeHTTP(w, req)
+	todoNormalUser := createTestTodo(t, router, tokenNormal, "Normal User Todo to Update", false)
+	todoOtherUser := createTestTodo(t, router, tokenOther, "Other User Todo to Update", false)
 
-	assert.Equal(t, http.StatusNotFound, w.Code)
-	var response map[string]string
-	err = json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Contains(t, response["error"], "Todo not found")
+	// --- Test Case 1: 自分のTODOは更新できること ---
+	t.Run("User can update their own todo", func(t *testing.T) {
+		updatePayload := `{"title": "Updated My Todo", "completed": true}`
+		req, _ := http.NewRequest(http.MethodPut, fmt.Sprintf("/api/todos/%d", todoNormalUser.ID), strings.NewReader(updatePayload))
+		req.Header.Set("Authorization", "Bearer "+tokenNormal)
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+		router.ServeHTTP(resp, req)
+
+		require.Equal(t, http.StatusOK, resp.Code)
+		var updatedTodo todo.Todo
+		err := json.Unmarshal(resp.Body.Bytes(), &updatedTodo)
+		require.NoError(t, err)
+		require.Equal(t, "Updated My Todo", updatedTodo.Title)
+		require.True(t, updatedTodo.Completed)
+		require.Equal(t, todoNormalUser.ID, updatedTodo.UserID) // UserIDが変わらないことを確認
+	})
+
+	// --- Test Case 2: 他人のTODOは更新できないこと ---
+	t.Run("User cannot update another user's todo", func(t *testing.T) {
+		updatePayload := `{"title": "Try to Update Other Todo", "completed": true}`
+		req, _ := http.NewRequest(http.MethodPut, fmt.Sprintf("/api/todos/%d", todoOtherUser.ID), strings.NewReader(updatePayload))
+		req.Header.Set("Authorization", "Bearer "+tokenNormal) // NormalユーザーがOtherユーザーのTODOを更新しようとする
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+		router.ServeHTTP(resp, req)
+
+		require.Equal(t, http.StatusForbidden, resp.Code)
+	})
+
+	// --- Test Case 3: 管理者は他人のTODOも更新できること ---
+	t.Run("Admin can update any user's todo", func(t *testing.T) {
+		updatePayload := `{"title": "Admin Updated Other Todo", "completed": true}`
+		req, _ := http.NewRequest(http.MethodPut, fmt.Sprintf("/api/todos/%d", todoOtherUser.ID), strings.NewReader(updatePayload))
+		req.Header.Set("Authorization", "Bearer "+tokenAdmin)
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+		router.ServeHTTP(resp, req)
+
+		require.Equal(t, http.StatusOK, resp.Code)
+		var updatedTodo todo.Todo
+		err := json.Unmarshal(resp.Body.Bytes(), &updatedTodo)
+		require.NoError(t, err)
+		require.Equal(t, "Admin Updated Other Todo", updatedTodo.Title)
+		require.True(t, updatedTodo.Completed)
+		require.Equal(t, otherUser.ID, updatedTodo.UserID) // 元の所有者が変わらないことを確認
+	})
 }
 
-func TestUpdateTodo_Success(t *testing.T) {
-	db, r, todoRepo, _ := setupTestDB(t)
+func TestDeleteTodoHandler_Authorization(t *testing.T) {
+	db, router, todoRepo, userRepo := setupTestDB(t)
 	defer db.Close()
 
-	token, err := loginAndGetToken(t, r, "normal_user@example.com", "password123")
+	tokenNormal, err := loginAndGetToken(t, router, "normal_user@example.com", "password123")
+	require.NoError(t, err)
+	tokenAdmin, err := loginAndGetToken(t, router, "admin@example.com", "adminpass")
 	require.NoError(t, err)
 
-	originalTodo := todo.Todo{Title: "Original Todo", Completed: false, UserID: 1}
-	createdTodo, err := todoRepo.Create(&originalTodo)
-	assert.NoError(t, err)
-	assert.NotZero(t, createdTodo.ID)
-
-	time.Sleep(1 * time.Second)
-
-	updatedData := map[string]interface{}{
-		"title":     "Updated Todo",
-		"completed": true,
-		"user_id":   1,
-	}
-	jsonValue, _ := json.Marshal(updatedData)
-
-	req, _ := http.NewRequest("PUT", fmt.Sprintf("/api/todos/%d", createdTodo.ID), bytes.NewBuffer(jsonValue))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	w := httptest.NewRecorder()
-
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	var responseTodo todo.Todo
-	err = json.Unmarshal(w.Body.Bytes(), &responseTodo)
-	assert.NoError(t, err)
-	assert.Equal(t, createdTodo.ID, responseTodo.ID)
-	assert.Equal(t, "Updated Todo", responseTodo.Title)
-	assert.True(t, responseTodo.Completed)
-	assert.True(t, responseTodo.UpdatedAt.After(createdTodo.UpdatedAt), "UpdatedAt should be updated after the original CreatedAt")
-	assert.Equal(t, originalTodo.UserID, responseTodo.UserID, "Expected UserID to remain the same")
-}
-
-func TestUpdateTodo_NotFound(t *testing.T) {
-	db, r, _, _ := setupTestDB(t)
-	defer db.Close()
-
-	token, err := loginAndGetToken(t, r, "normal_user@example.com", "password123")
+	_ = createTestUser(t, userRepo, "otheruser_for_delete", "other_for_delete@example.com", "password123", "user")
+	tokenOther, err := loginAndGetToken(t, router, "other_for_delete@example.com", "password123")
 	require.NoError(t, err)
 
-	updatedData := map[string]interface{}{
-		"title":     "Non Existent Todo",
-		"completed": true,
-		"user_id":   1,
-	}
-	jsonValue, _ := json.Marshal(updatedData)
+	todoNormalUser := createTestTodo(t, router, tokenNormal, "Normal User Todo to Delete", false)
+	todoOtherUser := createTestTodo(t, router, tokenOther, "Other User Todo to Delete", false)
 
-	req, _ := http.NewRequest("PUT", "/api/todos/99999", bytes.NewBuffer(jsonValue))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	w := httptest.NewRecorder()
+	// --- Test Case 1: 自分のTODOは削除できること ---
+	t.Run("User can delete their own todo", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/api/todos/%d", todoNormalUser.ID), nil)
+		req.Header.Set("Authorization", "Bearer "+tokenNormal)
+		resp := httptest.NewRecorder()
+		router.ServeHTTP(resp, req)
 
-	r.ServeHTTP(w, req)
+		require.Equal(t, http.StatusNoContent, resp.Code)
+		// 削除されたことを確認
+		_, err := todoRepo.FindByID(todoNormalUser.ID)
+		require.ErrorIs(t, err, todo.ErrTodoNotFound)
+	})
 
-	assert.Equal(t, http.StatusNotFound, w.Code)
-	var response map[string]string
-	err = json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Contains(t, response["error"], "Todo not found")
-}
+	// --- Test Case 2: 他人のTODOは削除できないこと ---
+	t.Run("User cannot delete another user's todo", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/api/todos/%d", todoOtherUser.ID), nil)
+		req.Header.Set("Authorization", "Bearer "+tokenNormal) // NormalユーザーがOtherユーザーのTODOを削除しようとする
+		resp := httptest.NewRecorder()
+		router.ServeHTTP(resp, req)
 
-func TestDeleteTodo_Success(t *testing.T) {
-	db, r, todoRepo, _ := setupTestDB(t)
-	defer db.Close()
+		require.Equal(t, http.StatusForbidden, resp.Code)
+		// 削除されていないことを確認
+		_, err := todoRepo.FindByID(todoOtherUser.ID)
+		require.NoError(t, err)
+	})
 
-	token, err := loginAndGetToken(t, r, "normal_user@example.com", "password123")
-	require.NoError(t, err)
+	// --- Test Case 3: 管理者は他人のTODOも削除できること ---
+	t.Run("Admin can delete any user's todo", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/api/todos/%d", todoOtherUser.ID), nil)
+		req.Header.Set("Authorization", "Bearer "+tokenAdmin)
+		resp := httptest.NewRecorder()
+		router.ServeHTTP(resp, req)
 
-	newTodo := todo.Todo{Title: "Todo to Delete", Completed: false, UserID: 1}
-	createdTodo, err := todoRepo.Create(&newTodo)
-	assert.NoError(t, err)
-	assert.NotZero(t, createdTodo.ID)
-
-	req, _ := http.NewRequest("DELETE", fmt.Sprintf("/api/todos/%d", createdTodo.ID), nil)
-	req.Header.Set("Authorization", "Bearer "+token)
-	w := httptest.NewRecorder()
-
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusNoContent, w.Code)
-
-	_, err = todoRepo.FindByID(createdTodo.ID)
-	assert.Error(t, err, "Expected an error as todo should be deleted")
-	assert.True(t, errors.Is(err, todo.ErrTodoNotFound), "Expected ErrTodoNotFound after deletion")
-}
-
-func TestDeleteTodo_NotFound(t *testing.T) {
-	db, r, _, _ := setupTestDB(t)
-	defer db.Close()
-
-	token, err := loginAndGetToken(t, r, "normal_user@example.com", "password123")
-	require.NoError(t, err)
-
-	req, _ := http.NewRequest("DELETE", "/api/todos/99999", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
-	w := httptest.NewRecorder()
-
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusNotFound, w.Code)
-	var response map[string]string
-	err = json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Contains(t, response["error"], "Todo not found")
+		require.Equal(t, http.StatusNoContent, resp.Code)
+		// 削除されたことを確認
+		_, err := todoRepo.FindByID(todoOtherUser.ID)
+		require.ErrorIs(t, err, todo.ErrTodoNotFound)
+	})
 }

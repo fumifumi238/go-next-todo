@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,18 +13,20 @@ import (
 	"os"
 	"testing"
 
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
-	_ "github.com/go-sql-driver/mysql"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"go-next-todo/backend/internal/todo"
 	"go-next-todo/backend/internal/user"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/joho/godotenv"
 )
 
 // setupTestDB はテスト用のデータベース接続を確立し、テーブルを作成し、テストデータを投入します。
 func setupTestDB(t *testing.T) (*sql.DB, *gin.Engine, *todo.Repository, *user.Repository) {
-
+err := godotenv.Load("../../../.env")
 	dbUser := os.Getenv("TEST_DB_USER")
 	dbPass := os.Getenv("TEST_DB_PASS")
 	dbHost := os.Getenv("TEST_DB_HOST")
@@ -156,42 +159,70 @@ func setupTestRouter(t *testing.T, db *sql.DB) *gin.Engine {
 	return r
 }
 
-// loginAndGetToken はテスト用のヘルパー関数で、指定された資格情報でログインし、JWTトークンを返します。
-func loginAndGetToken(t *testing.T, r *gin.Engine, email, password string) (string, error) {
-	loginCredentials := map[string]string{
+func createTestUser(t *testing.T, userRepo *user.Repository, username, email, password, role string) *user.User {
+	hashedPassword, err := user.HashPassword(password)
+	require.NoError(t, err)
+
+	newUser := user.User{
+		Username:     username,
+		Email:        email,
+		PasswordHash: hashedPassword,
+		Role:         role,
+	}
+
+	createdUser, err := userRepo.Create(&newUser)
+	require.NoError(t, err)
+	require.NotNil(t, createdUser)
+	require.NotEqual(t, 0, createdUser.ID)
+	return createdUser
+}
+// createTestTodo はテスト用のTODOを作成し、データベースに保存します。
+func createTestTodo(t *testing.T, router *gin.Engine, token, title string, completed bool) *todo.Todo {
+	todoPayload := map[string]interface{}{
+		"title":     title,
+		"completed": completed,
+	}
+	body, _ := json.Marshal(todoPayload)
+
+	req, _ := http.NewRequest(http.MethodPost, "/api/todos", bytes.NewBuffer(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	require.Equal(t, http.StatusCreated, resp.Code, "TODO作成に失敗しました: %s", resp.Body.String())
+
+	var createdTodo todo.Todo
+	err := json.Unmarshal(resp.Body.Bytes(), &createdTodo)
+	require.NoError(t, err)
+	return &createdTodo
+}
+
+func loginAndGetToken(t *testing.T, router *gin.Engine, email, password string) (string, error) {
+	loginPayload := map[string]string{
 		"email":    email,
 		"password": password,
 	}
-	jsonValue, _ := json.Marshal(loginCredentials)
+	body, _ := json.Marshal(loginPayload)
 
-	loginReq, _ := http.NewRequest("POST", "/api/login", bytes.NewBuffer(jsonValue))
-	loginReq.Header.Set("Content-Type", "application/json")
-	loginW := httptest.NewRecorder()
-	r.ServeHTTP(loginW, loginReq)
+	req, _ := http.NewRequest(http.MethodPost, "/api/login", bytes.NewBuffer(body)) // ルーターのパスに合わせて /login に変更
+	req.Header.Set("Content-Type", "application/json")
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
 
-	assert.Equal(t, http.StatusOK, loginW.Code, "Login failed: Expected HTTP Status Code 200 OK")
-	var loginResponse map[string]string
-	err := json.Unmarshal(loginW.Body.Bytes(), &loginResponse)
-	assert.NoError(t, err, "Failed to unmarshal login response")
-	tokenString, exists := loginResponse["token"]
-	assert.True(t, exists, "Expected JWT token from login response")
-	assert.NotEmpty(t, tokenString, "Expected JWT token not to be empty")
-	return tokenString, err
-}
+	if resp.Code != http.StatusOK {
+		return "", fmt.Errorf("login failed with status %d: %s", resp.Code, resp.Body.String())
+	}
 
-// truncateTables はテスト実行前にDBのテーブルを空にする
-func truncateTables(db *sql.DB) {
-	// Foreign Key Constraint があるため、todos -> users の順で削除
-	if _, err := db.Exec("SET FOREIGN_KEY_CHECKS=0;"); err != nil {
-		log.Fatalf("Failed to disable foreign key checks: %v", err)
+	var loginRes map[string]string
+	err := json.Unmarshal(resp.Body.Bytes(), &loginRes)
+	if err != nil {
+		return "", fmt.Errorf("failed to unmarshal login response: %w", err)
 	}
-	if _, err := db.Exec("TRUNCATE TABLE todos"); err != nil {
-		log.Fatalf("Failed to truncate todos table: %v", err)
+
+	token, ok := loginRes["token"]
+	if !ok {
+		return "", errors.New("token not found in login response")
 	}
-	if _, err := db.Exec("TRUNCATE TABLE users"); err != nil {
-		log.Fatalf("Failed to truncate users table: %v", err)
-	}
-	if _, err := db.Exec("SET FOREIGN_KEY_CHECKS=1;"); err != nil {
-		log.Fatalf("Failed to enable foreign key checks: %v", err)
-	}
+	return token, nil
 }

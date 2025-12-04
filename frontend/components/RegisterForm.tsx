@@ -5,13 +5,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { RegisterFormInputs, registerSchema } from "@/app/types/user";
 import { registerUser } from "@/lib/api";
-import { FaCheckCircle, FaTimesCircle } from "react-icons/fa"; // アイコンをインポート
+import FieldStatus from "@/components/FieldStatus";
 
 const RegisterForm: React.FC = () => {
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting, touchedFields }, // touchedFields を追加
+    formState: { errors, isSubmitting, touchedFields, isValid }, // touchedFields を追加
     setError,
     reset,
     watch,
@@ -19,6 +19,13 @@ const RegisterForm: React.FC = () => {
     resolver: zodResolver(registerSchema),
     mode: "onChange",
   });
+
+  const username = watch("username");
+  const email = watch("email");
+  const password = watch("password");
+
+  // 空白チェック
+  const isAllFilled = username && email && password;
 
   const onSubmit = async (data: RegisterFormInputs) => {
     try {
@@ -52,53 +59,6 @@ const RegisterForm: React.FC = () => {
     }
     return "border-gray-300 focus:ring-indigo-500 focus:border-indigo-500";
   };
-  const getIcon = (fieldName: keyof RegisterFormInputs) => {
-    console.log(
-      `getIcon called for ${fieldName}: touchedFields[${fieldName}]=`,
-      touchedFields[fieldName],
-      `errors[${fieldName}]=`,
-      errors[fieldName]
-    );
-    if (!touchedFields[fieldName]) {
-      console.log(`getIcon for ${fieldName}: Not touched, returning null`);
-      return null;
-    }
-    if (errors[fieldName]) {
-      console.log(
-        `getIcon for ${fieldName}: Error present, returning FaTimesCircle`
-      );
-      return <FaTimesCircle className="text-red-500" />;
-    }
-    console.log(`getIcon for ${fieldName}: No error, returning FaCheckCircle`);
-    return <FaCheckCircle className="text-green-500" />;
-  };
-
-  const renderFieldStatus = (field: keyof RegisterFormInputs) => {
-    const value = watch(field); // 現在の入力値を取得
-    const error = errors[field]?.message; // バリデーションエラー
-
-    // 未入力なら何も表示しない
-    if (!value) return <div className="min-h-6 mt-1" />;
-
-    // エラーがあれば赤
-    if (error) {
-      return (
-        <div className="min-h-6 mt-1 flex items-center gap-1">
-          <FaTimesCircle className="text-red-500" />
-          <p className="text-sm text-red-600">{error}</p>
-        </div>
-      );
-    }
-
-    // 入力があってエラーがない → 緑
-    return (
-      <div className="min-h-6 mt-1 flex items-center gap-1">
-        <FaCheckCircle className="text-green-500" />
-        <p className="text-sm text-green-600">OK</p>
-      </div>
-    );
-  };
-
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
@@ -119,7 +79,10 @@ const RegisterForm: React.FC = () => {
             )}`} // ここで pl-10 を追加
           />
         </div>
-        {renderFieldStatus("username")}
+        <FieldStatus
+          value={watch("username")}
+          error={errors.username?.message}
+        />
       </div>
       <div className="relative">
         <label
@@ -137,7 +100,7 @@ const RegisterForm: React.FC = () => {
             )}`} // ここで pl-10 を追加
           />
         </div>
-        {renderFieldStatus("email")}
+        <FieldStatus value={watch("email")} error={errors.email?.message} />
       </div>
 
       <div className="relative">
@@ -156,12 +119,19 @@ const RegisterForm: React.FC = () => {
             )}`} // ここで pl-10 を追加
           />
         </div>
-        {renderFieldStatus("password")}
+        <FieldStatus
+          value={watch("password")}
+          error={errors.password?.message}
+        />
       </div>
       <button
         type="submit"
-        disabled={isSubmitting}
-        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">
+        disabled={isSubmitting || !isAllFilled || !isValid}
+        className={`
+    w-full flex justify-center py-2 px-4 rounded-md shadow-sm text-sm font-medium bg-primary text-primary-foreground)]
+    border border-transparent hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed
+
+  `}>
         {isSubmitting ? "登録中..." : "登録"}
       </button>
       {/* 修正: root.serverError のメッセージのみを表示 */}

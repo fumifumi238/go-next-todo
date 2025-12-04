@@ -13,7 +13,9 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
-    "next": "16.0.3",
+    "js-cookie": "^3.0.5",
+    "next": "^16.0.7",
+    "node": "^20.19.6",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-hook-form": "^7.67.0",
@@ -30,6 +32,7 @@
     "@testing-library/react": "^16.0.0",
     "@testing-library/user-event": "^14.5.1",
     "@types/jest": "^29.5.11",
+    "@types/js-cookie": "^3.0.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

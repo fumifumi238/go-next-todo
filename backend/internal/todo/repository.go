@@ -102,6 +102,36 @@ func (r *Repository) FindByID(id int) (*Todo, error) {
 	return &t, nil
 }
 
+func (r *Repository) FindByUserID(userID int) ([]*Todo, error) { // FindAllと同様にポインタのスライスを返すように変更
+	rows, err := r.DB.Query("SELECT id, user_id, title, completed, created_at, updated_at FROM todos WHERE user_id = ? ORDER BY created_at DESC", userID)
+	if err != nil {
+		log.Printf("Failed to query todos by user ID: %v", err)
+		return nil, fmt.Errorf("could not query todos by user ID: %w", err)
+	}
+	defer rows.Close()
+
+	var todos []*Todo // ポインタのスライス
+	for rows.Next() {
+		var t Todo
+		if err := rows.Scan(&t.ID, &t.UserID, &t.Title, &t.Completed, &t.CreatedAt, &t.UpdatedAt); err != nil {
+			log.Printf("Failed to scan todo by user ID: %v", err)
+			return nil, fmt.Errorf("could not scan todo by user ID: %w", err)
+		}
+		todos = append(todos, &t) // アドレスをappend
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating todos by user ID: %w", err)
+	}
+
+	// 結果が空の場合でも、nilではなく空のスライスを返す
+	if todos == nil {
+		return []*Todo{}, nil
+	}
+
+	return todos, nil
+}
+
 // Update は指定されたIDのTodoタスクを更新します。
 func (r *Repository) Update(id int, t *Todo) (*Todo, error) {
 	query := "UPDATE todos SET title = ?, completed = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?" // 💡 updated_at を追加

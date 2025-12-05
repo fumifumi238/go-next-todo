@@ -6,10 +6,13 @@ const API_URL =
     ? "http://localhost:8080"
     : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
-export async function fetchTodos(): Promise<Todo[]> {
+export async function fetchTodos(token: string): Promise<Todo[]> {
   try {
     const res = await fetch(`${API_URL}/api/todos`, {
       cache: "no-store",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
     });
 
     if (!res.ok) {
@@ -46,12 +49,14 @@ export async function fetchTodos(): Promise<Todo[]> {
 }
 
 export async function createTodo(
-  todo: Omit<Todo, "id" | "created_at">
+  todo: Omit<Todo, "id" | "created_at">,
+  token: string
 ): Promise<Todo> {
   try {
     const res = await fetch(`${API_URL}/api/todos`, {
       method: "POST",
       headers: {
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(todo),
@@ -84,12 +89,14 @@ export async function createTodo(
 
 export async function updateTodo(
   id: number,
-  todo: Omit<Todo, "id" | "created_at">
+  todo: Omit<Todo, "id" | "created_at">,
+  token: string
 ): Promise<Todo> {
   try {
     const res = await fetch(`${API_URL}/api/todos/${id}`, {
       method: "PUT",
       headers: {
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(todo),
@@ -120,10 +127,13 @@ export async function updateTodo(
   }
 }
 
-export async function deleteTodo(id: number): Promise<void> {
+export async function deleteTodo(id: number, token: string): Promise<void> {
   try {
     const res = await fetch(`${API_URL}/api/todos/${id}`, {
       method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
     });
 
     if (!res.ok) {

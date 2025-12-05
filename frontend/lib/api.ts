@@ -1,7 +1,7 @@
 import { RegisterFormInputs, LoginFormInputs } from "@/app/types/user";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080/api";
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 
 interface ApiResponse<T> {
   data?: T;
@@ -13,7 +13,7 @@ export const registerUser = async (
   userData: RegisterFormInputs
 ): Promise<ApiResponse<{ message: string; user_id: number }>> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/register`, {
+    const response = await fetch(`${API_BASE_URL}/api/register`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -41,7 +41,7 @@ export const loginUser = async (
   credentials: LoginFormInputs
 ): Promise<ApiResponse<{ token: string; user_id: number; role: string }>> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/login`, {
+    const response = await fetch(`${API_BASE_URL}/api/login`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -19,6 +19,7 @@ func setupRouter(db *sql.DB, todoRepo *todo.Repository, userRepo *user.Repositor
 	config.AllowOrigins = []string{"http://localhost:3000"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
+	config.AllowCredentials = true
 	r.Use(cors.New(config))
 
 	// ルーティングの設定 (クロージャを使用してリポジトリをハンドラーに注入)

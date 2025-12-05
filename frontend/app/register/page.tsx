@@ -1,5 +1,6 @@
 import React from "react";
 import RegisterForm from "@/components/RegisterForm";
+import Link from "next/link";
 
 const RegisterPage: React.FC = () => {
   return (
@@ -11,6 +12,14 @@ const RegisterPage: React.FC = () => {
           </h2>
         </div>
         <RegisterForm />
+        <p className="mt-2 text-center text-sm text-gray-600">
+          すでにアカウントをお持ちですか？{" "}
+          <Link
+            href="/login" // ログインページへのリンク
+            className="font-medium text-indigo-600 hover:text-indigo-500">
+            ログインはこちら
+          </Link>
+        </p>
       </div>
     </div>
   );

@@ -10,12 +10,12 @@ type Props = {
 
 const FieldStatus: React.FC<Props> = ({ value, error }) => {
   // 未入力なら空の高さ確保だけ
-  if (!value) return <div className="min-h-6 mt-1" />;
+  if (!value) return <div className="min-h-6 mt-0.5" />;
 
   // エラーあり → 赤
   if (error) {
     return (
-      <div className="min-h-6 mt-1 flex items-center gap-1">
+      <div className="min-h-6 mt-0.5 flex items-center gap-1">
         <FaTimesCircle className="text-red-500" />
         <p className="text-sm text-red-600">{error}</p>
       </div>
@@ -24,7 +24,7 @@ const FieldStatus: React.FC<Props> = ({ value, error }) => {
 
   // 問題なし → 緑
   return (
-    <div className="min-h-6 mt-1 flex items-center gap-1">
+    <div className="min-h-6 mt-0.5 flex items-center gap-1">
       <FaCheckCircle className="text-green-500" />
       <p className="text-sm text-green-600">OK</p>
     </div>

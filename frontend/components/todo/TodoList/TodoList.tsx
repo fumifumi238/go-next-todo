@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import { Todo } from '@/app/types/todo';
+import { Todo } from "@/app/types/todo";
 import { updateTodo, deleteTodo } from "@/lib/api/todo";
 
-interface TodoListProps {
+type TodoListProps = {
   todos: Todo[];
   onUpdate: () => void;
   token: string;
-}
+};
 
 export default function TodoList({ todos, onUpdate, token }: TodoListProps) {
   const handleToggle = async (todo: Todo) => {
@@ -70,11 +70,10 @@ export default function TodoList({ todos, onUpdate, token }: TodoListProps) {
             className={`flex-1 ${
               todo.completed
                 ? "line-through text-muted-foreground"
-                : "text-var-foreground"
+                : "text-foreground"
             }`}>
             {todo.title}
           </span>
-          {/* todo.idはhandeleDeleteの中でundefinedかどうかをチェックしたほうが読みやすいです。 */}
           <button
             onClick={() => handleDelete(todo.id)}
             className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded transition-colors">

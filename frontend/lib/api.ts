@@ -57,10 +57,6 @@ export const loginUser = async (
       };
     }
 
-    // バックエンドのレスポンスに応じて、user_id と role も含めるように調整
-    // 現時点ではバックエンドのloginHandlerがtokenのみを返しているので、
-    // バックエンドのloginHandlerを修正してuser_idとroleも返すようにする必要があります。
-    // 例: c.JSON(http.StatusOK, gin.H{"token": tokenString, "user_id": foundUser.ID, "role": foundUser.Role})
     return {
       data: { token: data.token, user_id: data.user_id, role: data.role },
     };

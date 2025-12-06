@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { createTodo } from '@/lib/api/todo';
 
-interface TodoFormProps {
+type TodoFormProps = {
   onAdd: () => void;
   token: string;
 }

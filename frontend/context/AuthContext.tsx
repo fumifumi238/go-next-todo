@@ -3,11 +3,11 @@
 import React, { createContext, useState, ReactNode, useCallback } from "react";
 import Cookies from "js-cookie";
 
-interface AuthContextType {
+type AuthContextType = {
   token: string | null;
   login: (newToken: string) => void;
   logout: () => void;
-}
+};
 
 export const AuthContext = createContext<AuthContextType>({
   token: null,
@@ -15,10 +15,10 @@ export const AuthContext = createContext<AuthContextType>({
   logout: () => {},
 });
 
-interface AuthProviderProps {
+type AuthProviderProps = {
   children: ReactNode;
   initialToken: string | null;
-}
+};
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({
   children,

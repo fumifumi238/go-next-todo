@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useContext } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoginFormInputs, loginSchema } from "@/app/types/user";
 import { loginUser } from "@/lib/api"; // ログインAPIをインポート
@@ -18,15 +18,14 @@ const LoginForm: React.FC = () => {
     formState: { errors, isSubmitting, touchedFields, isValid },
     setError,
     reset,
-    watch,
+    control,
   } = useForm<LoginFormInputs>({
     resolver: zodResolver(loginSchema),
     mode: "onChange",
   });
 
-  const email = watch("email");
-  const password = watch("password");
-
+  const email = useWatch({ control, name: "email" });
+  const password = useWatch({ control, name: "password" });
   // 空白チェック (usernameは不要)
   const isAllFilled = email && password;
 
@@ -100,7 +99,7 @@ const LoginForm: React.FC = () => {
             )}`}
           />
         </div>
-        <FieldStatus value={watch("email")} error={errors.email?.message} />
+        <FieldStatus value={email} error={errors.email?.message} />
       </div>
 
       <div className="relative">
@@ -119,10 +118,7 @@ const LoginForm: React.FC = () => {
             )}`}
           />
         </div>
-        <FieldStatus
-          value={watch("password")}
-          error={errors.password?.message}
-        />
+        <FieldStatus value={password} error={errors.password?.message} />
       </div>
       <button
         type="submit"

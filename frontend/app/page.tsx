@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Todo } from '@/app/types/todo';
 import { fetchTodos } from '@/lib/api/todo';
-import TodoForm from '@/components/todo/TodoForm';
-import TodoList from '@/components/todo/TodoList';
+import TodoForm from "@/components/todo/TodoForm/TodoForm";
+import TodoList from "@/components/todo/TodoList/TodoList";
 import { useRouter } from "next/navigation"; // useRouterをインポート
 import { AuthContext } from "@/context/AuthContext"; // AuthContextをインポート
 import { useContext, useCallback } from "react";

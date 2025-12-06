@@ -1,7 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import TodoForm from "@/components/todo/TodoForm";
+import TodoForm from "@/components/todo/TodoForm/TodoForm";
 import * as api from "@/lib/api/todo";
+import { Todo } from "@/app/types/todo";
 
 // API関数をモック化
 jest.mock("@/lib/api/todo");
@@ -14,7 +15,7 @@ describe("TodoForm", () => {
   });
 
   it("フォームが正しくレンダリングされる", () => {
-    render(<TodoForm onAdd={mockOnAdd} />);
+    render(<TodoForm onAdd={mockOnAdd} token="fake-token" />);
 
     const input = screen.getByPlaceholderText("新しいTODOを入力...");
     const button = screen.getByRole("button", { name: "追加" });
@@ -26,7 +27,7 @@ describe("TodoForm", () => {
 
   it("入力フィールドにテキストを入力できる", async () => {
     const user = userEvent.setup();
-    render(<TodoForm onAdd={mockOnAdd} />);
+    render(<TodoForm onAdd={mockOnAdd} token="fake-token" />);
 
     const input = screen.getByPlaceholderText(
       "新しいTODOを入力..."
@@ -38,7 +39,7 @@ describe("TodoForm", () => {
 
   it("テキストを入力するとボタンが有効になる", async () => {
     const user = userEvent.setup();
-    render(<TodoForm onAdd={mockOnAdd} />);
+    render(<TodoForm onAdd={mockOnAdd} token="fake-token" />);
 
     const input = screen.getByPlaceholderText("新しいTODOを入力...");
     const button = screen.getByRole("button", { name: "追加" });
@@ -49,11 +50,12 @@ describe("TodoForm", () => {
   });
 
   it("空のテキストで送信するとアラートが表示される", async () => {
-    const user = userEvent.setup();
     const alertSpy = jest.spyOn(window, "alert").mockImplementation(() => {});
 
     // フォームを直接送信（ボタンは無効なので、フォームのsubmitイベントを直接発火）
-    const { container } = render(<TodoForm onAdd={mockOnAdd} />);
+    const { container } = render(
+      <TodoForm onAdd={mockOnAdd} token="fake-token" />
+    );
     const form = container.querySelector("form");
 
     if (form) {
@@ -83,7 +85,7 @@ describe("TodoForm", () => {
       user_id: 1,
     });
 
-    render(<TodoForm onAdd={mockOnAdd} />);
+    render(<TodoForm onAdd={mockOnAdd} token="fake-token" />);
 
     const input = screen.getByPlaceholderText("新しいTODOを入力...");
     const button = screen.getByRole("button", { name: "追加" });
@@ -92,11 +94,14 @@ describe("TodoForm", () => {
     await user.click(button);
 
     await waitFor(() => {
-      expect(mockCreateTodo).toHaveBeenCalledWith({
-        title: "新しいTODO",
-        completed: false,
-        user_id: 1,
-      });
+      expect(mockCreateTodo).toHaveBeenCalledWith(
+        {
+          title: "新しいTODO",
+          completed: false,
+          user_id: 1,
+        },
+        "fake-token"
+      );
     });
 
     await waitFor(() => {
@@ -114,13 +119,13 @@ describe("TodoForm", () => {
     >;
 
     // 解決を遅延させる
-    let resolvePromise: (value: any) => void;
-    const promise = new Promise((resolve) => {
+    let resolvePromise: (value: Todo) => void;
+    const promise = new Promise<Todo>((resolve) => {
       resolvePromise = resolve;
     });
-    mockCreateTodo.mockReturnValue(promise as Promise<any>);
+    mockCreateTodo.mockReturnValue(promise);
 
-    render(<TodoForm onAdd={mockOnAdd} />);
+    render(<TodoForm onAdd={mockOnAdd} token="fake-token" />);
 
     const input = screen.getByPlaceholderText("新しいTODOを入力...");
     const button = screen.getByRole("button", { name: "追加" });
@@ -142,6 +147,7 @@ describe("TodoForm", () => {
       title: "新しいTODO",
       completed: false,
       created_at: new Date().toISOString(),
+      user_id: 1,
     });
 
     await waitFor(() => {
@@ -157,7 +163,7 @@ describe("TodoForm", () => {
     >;
     mockCreateTodo.mockRejectedValue(new Error("作成に失敗しました"));
 
-    render(<TodoForm onAdd={mockOnAdd} />);
+    render(<TodoForm onAdd={mockOnAdd} token="fake-token" />);
 
     const input = screen.getByPlaceholderText("新しいTODOを入力...");
     const button = screen.getByRole("button", { name: "追加" });

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useContext } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { RegisterFormInputs, registerSchema } from "@/app/types/user";
 import { registerUser, loginUser } from "@/lib/api";
@@ -16,7 +16,7 @@ const RegisterForm: React.FC = () => {
     formState: { errors, isSubmitting, touchedFields, isValid }, // touchedFields を追加
     setError,
     reset,
-    watch,
+    control,
   } = useForm<RegisterFormInputs>({
     resolver: zodResolver(registerSchema),
     mode: "onChange",
@@ -25,9 +25,9 @@ const RegisterForm: React.FC = () => {
   const { login } = useContext(AuthContext);
   const router = useRouter();
 
-  const username = watch("username");
-  const email = watch("email");
-  const password = watch("password");
+  const username = useWatch({ control, name: "username" });
+  const email = useWatch({ control, name: "email" });
+  const password = useWatch({ control, name: "password" });
 
   // 空白チェック
   const isAllFilled = username && email && password;
@@ -113,10 +113,7 @@ const RegisterForm: React.FC = () => {
               )}`} // ここで pl-10 を追加
             />
           </div>
-          <FieldStatus
-            value={watch("username")}
-            error={errors.username?.message}
-          />
+          <FieldStatus value={username} error={errors.username?.message} />
         </div>
         <div className="relative">
           <label
@@ -134,7 +131,7 @@ const RegisterForm: React.FC = () => {
               )}`} // ここで pl-10 を追加
             />
           </div>
-          <FieldStatus value={watch("email")} error={errors.email?.message} />
+          <FieldStatus value={email} error={errors.email?.message} />
         </div>
 
         <div className="relative">
@@ -153,10 +150,7 @@ const RegisterForm: React.FC = () => {
               )}`} // ここで pl-10 を追加
             />
           </div>
-          <FieldStatus
-            value={watch("password")}
-            error={errors.password?.message}
-          />
+          <FieldStatus value={password} error={errors.password?.message} />
         </div>
       </div>
       <button

@@ -1,13 +1,13 @@
-// Next.js navigationのモック
-export const useRouter = () => ({
-  push: jest.fn(),
-  replace: jest.fn(),
-  prefetch: jest.fn(),
-  back: jest.fn(),
-  forward: jest.fn(),
-  refresh: jest.fn(),
-});
+const mockPush = jest.fn();
 
-export const usePathname = () => '/';
-
-export const useSearchParams = () => new URLSearchParams();
+module.exports = {
+  useRouter: jest.fn(() => ({
+    push: mockPush,
+    replace: jest.fn(),
+    refresh: jest.fn(),
+    back: jest.fn(),
+    forward: jest.fn(),
+  })),
+  usePathname: jest.fn(() => "/mock-path"),
+  useSearchParams: jest.fn(() => new URLSearchParams()),
+};

@@ -1,14 +1,25 @@
-import { Todo } from "@/app//types/todo";
+import { z } from "zod";
+import { todoSchema } from "@/app/types/todo";
+
+type Todo = z.infer<typeof todoSchema>;
 
 // クライアントサイドでは常にlocalhostを使用（ブラウザはDocker内部ネットワークにアクセスできない）
-const API_URL =
+const API_BASE_URL =
   typeof window !== "undefined"
     ? "http://localhost:8080"
     : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
-export async function fetchTodos(token: string): Promise<Todo[]> {
+const todosResponseSchema = z.array(todoSchema);
+const todoResponseSchema = todoSchema;
+const errorResponseSchema = z.object({
+  error: z.string(),
+});
+
+export async function fetchTodos(
+  token: string
+): Promise<z.infer<typeof todosResponseSchema>> {
   try {
-    const res = await fetch(`${API_URL}/api/todos`, {
+    const res = await fetch(`${API_BASE_URL}/api/todos`, {
       cache: "no-store",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -19,11 +30,9 @@ export async function fetchTodos(token: string): Promise<Todo[]> {
       let errorMessage = `Failed to fetch todos: ${res.status} ${res.statusText}`;
       try {
         const errorData = await res.json();
-        if (errorData.error) {
-          errorMessage = errorData.error;
-        }
-        if (errorData.details) {
-          errorMessage += ` (${errorData.details})`;
+        const errorParsed = errorResponseSchema.safeParse(errorData);
+        if (errorParsed.success) {
+          errorMessage = errorParsed.data.error;
         }
       } catch {
         // JSONパースに失敗した場合はデフォルトメッセージを使用
@@ -31,7 +40,13 @@ export async function fetchTodos(token: string): Promise<Todo[]> {
       throw new Error(errorMessage);
     }
 
-    return res.json();
+    const data = await res.json();
+    const parsed = todosResponseSchema.safeParse(data);
+    if (!parsed.success) {
+      console.error("Response validation failed:", parsed.error);
+      throw new Error("レスポンス形式が無効です");
+    }
+    return parsed.data;
   } catch (error) {
     // ネットワークエラーまたはCORSエラーの場合
     if (
@@ -49,11 +64,11 @@ export async function fetchTodos(token: string): Promise<Todo[]> {
 }
 
 export async function createTodo(
-  todo: Omit<Todo, "id" | "created_at">,
+  todo: Omit<Todo, "id" | "user_id" | "created_at" | "updated_at">,
   token: string
 ): Promise<Todo> {
   try {
-    const res = await fetch(`${API_URL}/api/todos`, {
+    const res = await fetch(`${API_BASE_URL}/api/todos`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -64,13 +79,21 @@ export async function createTodo(
 
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
+      const errorParsed = errorResponseSchema.safeParse(errorData);
       throw new Error(
-        errorData.error ||
-          `Failed to create todo: ${res.status} ${res.statusText}`
+        errorParsed.success
+          ? errorParsed.data.error
+          : `Failed to create todo: ${res.status} ${res.statusText}`
       );
     }
 
-    return res.json();
+    const data = await res.json();
+    const parsed = todoResponseSchema.safeParse(data);
+    if (!parsed.success) {
+      console.error("Response validation failed:", parsed.error);
+      throw new Error("レスポンス形式が無効です");
+    }
+    return parsed.data;
   } catch (error) {
     // ネットワークエラーまたはCORSエラーの場合
     if (
@@ -89,11 +112,11 @@ export async function createTodo(
 
 export async function updateTodo(
   id: number,
-  todo: Omit<Todo, "id" | "created_at">,
+  todo: Omit<Todo, "id" | "created_at" | "updated_at">,
   token: string
 ): Promise<Todo> {
   try {
-    const res = await fetch(`${API_URL}/api/todos/${id}`, {
+    const res = await fetch(`${API_BASE_URL}/api/todos/${id}`, {
       method: "PUT",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -104,13 +127,21 @@ export async function updateTodo(
 
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
+      const errorParsed = errorResponseSchema.safeParse(errorData);
       throw new Error(
-        errorData.error ||
-          `Failed to update todo: ${res.status} ${res.statusText}`
+        errorParsed.success
+          ? errorParsed.data.error
+          : `Failed to update todo: ${res.status} ${res.statusText}`
       );
     }
 
-    return res.json();
+    const data = await res.json();
+    const parsed = todoResponseSchema.safeParse(data);
+    if (!parsed.success) {
+      console.error("Response validation failed:", parsed.error);
+      throw new Error("レスポンス形式が無効です");
+    }
+    return parsed.data;
   } catch (error) {
     // ネットワークエラーまたはCORSエラーの場合
     if (
@@ -129,7 +160,7 @@ export async function updateTodo(
 
 export async function deleteTodo(id: number, token: string): Promise<void> {
   try {
-    const res = await fetch(`${API_URL}/api/todos/${id}`, {
+    const res = await fetch(`${API_BASE_URL}/api/todos/${id}`, {
       method: "DELETE",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -138,9 +169,11 @@ export async function deleteTodo(id: number, token: string): Promise<void> {
 
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
+      const errorParsed = errorResponseSchema.safeParse(errorData);
       throw new Error(
-        errorData.error ||
-          `Failed to delete todo: ${res.status} ${res.statusText}`
+        errorParsed.success
+          ? errorParsed.data.error
+          : `Failed to delete todo: ${res.status} ${res.statusText}`
       );
     }
   } catch (error) {

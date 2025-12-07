@@ -1,6 +1,6 @@
 "use client"; // クライアントコンポーネントとしてマーク
 
-import LoginForm from "@/components/LoginForm/LoginForm";
+import LoginForm from "@/features/auth/components/LoginForm/LoginForm";
 import Link from "next/link"; // Linkコンポーネントをインポート
 
 export default function LoginPage() {

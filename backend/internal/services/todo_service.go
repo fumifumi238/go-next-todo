@@ -36,7 +36,7 @@ func (s *TodoService) GetTodoByID(id, userID int, userRole string) (*models.Todo
 		return nil, err
 	}
 	if todo.UserID != userID && userRole != "admin" {
-		return nil, repositories.ErrTodoNotFound // アクセス拒否
+		return nil, repositories.ErrTodoForbidden // アクセス拒否
 	}
 	return todo, nil
 }
@@ -48,7 +48,7 @@ func (s *TodoService) UpdateTodo(id int, updateTodo *models.Todo, userID int, us
 		return nil, err
 	}
 	if existingTodo.UserID != userID && userRole != "admin" {
-		return nil, repositories.ErrTodoNotFound
+		return nil, repositories.ErrTodoForbidden
 	}
 	updateTodo.UserID = existingTodo.UserID // 元の所有者を保持
 	return s.todoRepo.Update(id, updateTodo)
@@ -61,7 +61,7 @@ func (s *TodoService) DeleteTodo(id, userID int, userRole string) error {
 		return err
 	}
 	if existingTodo.UserID != userID && userRole != "admin" {
-		return repositories.ErrTodoNotFound
+		return repositories.ErrTodoForbidden
 	}
 	return s.todoRepo.Delete(id)
 }

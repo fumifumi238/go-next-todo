@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go-next-todo/backend/internal/models"
+	"go-next-todo/backend/internal/repositories"
 	"go-next-todo/backend/internal/todo"
 	"go-next-todo/backend/testutil"
 )
@@ -308,7 +309,7 @@ func TestDeleteTodoHandler_Authorization(t *testing.T) {
 		require.Equal(t, http.StatusNoContent, resp.Code)
 		// 削除されたことを確認
 		_, err := todoRepo.FindByID(todoNormalUser.ID)
-		require.ErrorIs(t, err, todo.ErrTodoNotFound)
+		require.ErrorIs(t, err, repositories.ErrTodoNotFound)
 	})
 
 	// --- Test Case 2: 他人のTODOは削除できないこと ---
@@ -334,6 +335,6 @@ func TestDeleteTodoHandler_Authorization(t *testing.T) {
 		require.Equal(t, http.StatusNoContent, resp.Code)
 		// 削除されたことを確認
 		_, err := todoRepo.FindByID(todoOtherUser.ID)
-		require.ErrorIs(t, err, todo.ErrTodoNotFound)
+		require.ErrorIs(t, err, repositories.ErrTodoNotFound)
 	})
 }

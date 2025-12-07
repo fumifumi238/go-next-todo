@@ -22,6 +22,9 @@ func NewTodoRepository(db *sql.DB) *TodoRepository {
 // ErrTodoNotFound はTODOが見つからない場合のエラーです。
 var ErrTodoNotFound = errors.New("todo not found")
 
+// ErrTodoForbidden はTODOへのアクセスが禁止されている場合のエラーです。
+var ErrTodoForbidden = errors.New("todo access forbidden")
+
 // Create は新しいTodoタスクをデータベースに挿入します。
 func (r *TodoRepository) Create(t *models.Todo) (*models.Todo, error) {
 	query := "INSERT INTO todos (user_id, title, completed) VALUES (?, ?, ?)" // 💡 user_id を追加

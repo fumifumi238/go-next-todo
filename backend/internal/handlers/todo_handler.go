@@ -91,6 +91,10 @@ func (h *TodoHandler) UpdateTodoHandler(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Todo not found"})
 			return
 		}
+		if err == repositories.ErrTodoForbidden {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update todo"})
 		return
 	}
@@ -132,6 +136,10 @@ func (h *TodoHandler) DeleteTodoHandler(c *gin.Context) {
 	if err != nil {
 		if err == repositories.ErrTodoNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Todo not found"})
+			return
+		}
+		if err == repositories.ErrTodoForbidden {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete todo"})
@@ -207,6 +215,10 @@ func (h *TodoHandler) GetTodoByIDHandler(c *gin.Context) {
 	if err != nil {
 		if err == repositories.ErrTodoNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Todo not found"})
+			return
+		}
+		if err == repositories.ErrTodoForbidden {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch todo"})

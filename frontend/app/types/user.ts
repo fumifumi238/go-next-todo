@@ -4,7 +4,7 @@ import { z } from "zod";
 export const registerSchema = z.object({
   username: z
     .string()
-    .min(3, { message: "ユーザー名は3文字以上である必要があります" }),
+    .min(8, { message: "ユーザー名は8文字以上である必要があります" }),
   email: z.email({ message: "有効なメールアドレスを入力してください" }),
   password: z
     .string()
@@ -38,3 +38,31 @@ export const loginSchema = z.object({
 });
 // ユーザーログインリクエストの型定義
 export type LoginFormInputs = z.infer<typeof loginSchema>;
+
+// パスワードリセットリクエストのZodスキーマ
+export const resetPasswordSchema = z
+  .object({
+    password: z
+      .string()
+      .min(8, { message: "パスワードは8文字以上である必要があります" })
+      .regex(/[A-Z]/, {
+        message: "パスワードには大文字が1文字以上含まれている必要があります",
+      })
+      .regex(/[a-z]/, {
+        message: "パスワードには小文字が1文字以上含まれている必要があります",
+      })
+      .regex(/[0-9]/, {
+        message: "パスワードには数字が1文字以上含まれている必要があります",
+      })
+      .regex(/[^a-zA-Z0-9]/, {
+        message: "パスワードには記号が1文字以上含まれている必要があります",
+      }),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "パスワードが一致しません",
+    path: ["confirmPassword"],
+  });
+
+// パスワードリセットリクエストの型定義
+export type ResetPasswordFormInputs = z.infer<typeof resetPasswordSchema>;

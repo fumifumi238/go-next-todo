@@ -56,9 +56,9 @@ export default function TodoList({ todos, onUpdate, token }: TodoListProps) {
 
   return (
     <ul className="space-y-2">
-      {todos.map((todo) => (
+      {todos.map((todo, index) => (
         <li
-          key={todo.id}
+          key={index}
           className="bg-card border border-border rounded-lg p-4 flex items-center gap-4 hover:shadow-sm transition-shadow">
           <input
             type="checkbox"

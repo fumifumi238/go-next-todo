@@ -1,11 +1,15 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import Page from '../page';
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import Page from "../page";
 import * as api from "@/lib/api/todo";
 import { Todo } from "@/app/types/todo";
+import { AuthProvider } from "@/context/AuthContext";
 
 // API関数をモック化
 jest.mock("@/lib/api/todo");
+
+// js-cookieをモック化
+jest.mock("js-cookie");
 
 describe("Page", () => {
   const mockTodos: Todo[] = [
@@ -41,7 +45,11 @@ describe("Page", () => {
     });
     mockFetchTodos.mockReturnValue(promise);
 
-    render(<Page />);
+    render(
+      <AuthProvider initialToken="mock-token">
+        <Page />
+      </AuthProvider>
+    );
 
     expect(screen.getByText("読み込み中...")).toBeInTheDocument();
 
@@ -59,7 +67,11 @@ describe("Page", () => {
     >;
     mockFetchTodos.mockResolvedValue(mockTodos);
 
-    render(<Page />);
+    render(
+      <AuthProvider initialToken="mock-token">
+        <Page />
+      </AuthProvider>
+    );
 
     await waitFor(() => {
       expect(screen.getByText("テストTODO 1")).toBeInTheDocument();
@@ -74,7 +86,11 @@ describe("Page", () => {
     >;
     mockFetchTodos.mockRejectedValue(new Error("サーバーエラー"));
 
-    render(<Page />);
+    render(
+      <AuthProvider initialToken="mock-token">
+        <Page />
+      </AuthProvider>
+    );
 
     await waitFor(() => {
       expect(screen.getByText("エラー")).toBeInTheDocument();
@@ -90,7 +106,11 @@ describe("Page", () => {
     >;
     mockFetchTodos.mockResolvedValue(mockTodos);
 
-    render(<Page />);
+    render(
+      <AuthProvider initialToken="mock-token">
+        <Page />
+      </AuthProvider>
+    );
 
     await waitFor(() => {
       expect(screen.getByText(/合計: 2件/)).toBeInTheDocument();
@@ -111,7 +131,11 @@ describe("Page", () => {
       .mockRejectedValueOnce(new Error("サーバーエラー"))
       .mockResolvedValueOnce(mockTodos);
 
-    render(<Page />);
+    render(
+      <AuthProvider initialToken="mock-token">
+        <Page />
+      </AuthProvider>
+    );
 
     // エラーが表示されるまで待つ
     await waitFor(() => {

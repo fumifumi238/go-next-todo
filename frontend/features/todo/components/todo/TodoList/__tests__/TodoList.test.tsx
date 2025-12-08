@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import TodoList from "@/components/todo/TodoList/TodoList";
+import TodoList from "@/features/todo/components/todo/TodoList/TodoList";
 import * as api from "@/lib/api/todo";
 import { Todo } from "@/app/types/todo";
 
@@ -227,6 +227,7 @@ describe("TodoList", () => {
   it("IDが未指定のTODOの削除ボタンをクリックするとアラートが表示される", async () => {
     const user = userEvent.setup();
     const alertSpy = jest.spyOn(window, "alert").mockImplementation(() => {});
+    const confirmSpy = jest.spyOn(window, "confirm").mockReturnValue(true);
 
     render(
       <TodoList
@@ -252,5 +253,6 @@ describe("TodoList", () => {
     expect(mockOnUpdate).not.toHaveBeenCalled();
 
     alertSpy.mockRestore();
+    confirmSpy.mockRestore();
   });
 });

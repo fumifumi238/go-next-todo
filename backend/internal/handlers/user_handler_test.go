@@ -3,18 +3,30 @@ package handlers_test
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"go-next-todo/backend/testutil"
 
 	"github.com/stretchr/testify/assert"
 
 	"go-next-todo/backend/internal/models"
-	"go-next-todo/backend/internal/user"
+	"go-next-todo/backend/internal/repositories"
 )
+
+func generateResetToken() (string, error) {
+	bytes := make([]byte, 32)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
 
 func TestRegisterUser_Success(t *testing.T) {
 	db, r, _, _ := testutil.SetupTestDB(t)
@@ -35,7 +47,7 @@ func TestRegisterUser_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, w.Code, "Expected HTTP Status Code 201 Created")
 
-	var responseUser user.User
+	var responseUser models.User
 	err := json.Unmarshal(w.Body.Bytes(), &responseUser)
 	assert.NoError(t, err, "Response should be a valid JSON user object")
 	assert.NotZero(t, responseUser.ID, "Expected a non-zero User ID")
@@ -149,4 +161,81 @@ func TestLoginUser_InvalidCredentials(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
 	assert.Contains(t, response["error"], "Invalid credentials", "Expected 'Invalid credentials' error")
+}
+
+func TestResetPassword_Success(t *testing.T) {
+	db, r, _, _ := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	// トークンを作成
+	resetTokenRepo := repositories.NewMySQLResetTokenRepo(db)
+	token, _ := generateResetToken()
+	resetToken := &models.PasswordResetToken{
+		UserID:    1,
+		Token:     token,
+		ExpiresAt: time.Now().Add(1 * time.Hour),
+	}
+	err := resetTokenRepo.Save(resetToken)
+	assert.NoError(t, err)
+
+	resetData := map[string]string{
+		"password": "NewPassword123!",
+	}
+	jsonValue, _ := json.Marshal(resetData)
+
+	req, _ := http.NewRequest("POST", "/api/reset-password/"+token, bytes.NewBuffer(jsonValue))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code, "Expected HTTP Status Code 200 OK")
+	var response map[string]string
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Contains(t, response["message"], "Password reset successfully")
+}
+
+func TestForgotPassword_Success(t *testing.T) {
+	db, r, _, _ := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	forgotData := map[string]string{
+		"email": "normal_user@example.com",
+	}
+	jsonValue, _ := json.Marshal(forgotData)
+
+	req, _ := http.NewRequest("POST", "/api/forgot-password", bytes.NewBuffer(jsonValue))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code, "Expected HTTP Status Code 200 OK")
+	var response map[string]string
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Contains(t, response["message"], "Password reset email sent")
+}
+
+func TestForgotPassword_InvalidEmail(t *testing.T) {
+	db, r, _, _ := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	forgotData := map[string]string{
+		"email": "invalid-email",
+	}
+	jsonValue, _ := json.Marshal(forgotData)
+
+	req, _ := http.NewRequest("POST", "/api/forgot-password", bytes.NewBuffer(jsonValue))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, "Expected HTTP Status Code 400 Bad Request")
+	var response map[string]string
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Contains(t, response["error"], "Invalid request payload")
 }

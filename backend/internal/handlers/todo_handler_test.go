@@ -16,7 +16,6 @@ import (
 
 	"go-next-todo/backend/internal/models"
 	"go-next-todo/backend/internal/repositories"
-	"go-next-todo/backend/internal/todo"
 	"go-next-todo/backend/testutil"
 )
 
@@ -87,7 +86,7 @@ func TestCreateTodo_AuthenticatedUserSuccess(t *testing.T) {
 	require.WithinDuration(t, time.Now(), createdTodo.CreatedAt, 5*time.Second)
 	require.WithinDuration(t, time.Now(), createdTodo.UpdatedAt, 5*time.Second)
 
-	var dbTodo todo.Todo
+	var dbTodo models.Todo
 	err = db.QueryRow("SELECT id, user_id, title, completed, created_at, updated_at FROM todos WHERE id = ?", createdTodo.ID).Scan(
 		&dbTodo.ID, &dbTodo.UserID, &dbTodo.Title, &dbTodo.Completed, &dbTodo.CreatedAt, &dbTodo.UpdatedAt,
 	)
@@ -126,7 +125,7 @@ func TestGetTodosHandler_Authorization(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, resp.Code)
 
-		var todos []*todo.Todo
+		var todos []*models.Todo
 		err := json.Unmarshal(resp.Body.Bytes(), &todos)
 		require.NoError(t, err)
 		require.Len(t, todos, 2) // 自分のTODOが2つ
@@ -211,7 +210,7 @@ func TestGetTodoByIDHandler_Authorization(t *testing.T) {
 		router.ServeHTTP(resp, req)
 
 		require.Equal(t, http.StatusOK, resp.Code)
-		var fetchedTodo todo.Todo
+		var fetchedTodo models.Todo
 		err := json.Unmarshal(resp.Body.Bytes(), &fetchedTodo)
 		require.NoError(t, err)
 		require.Equal(t, todoOtherUser.ID, fetchedTodo.ID)
@@ -274,7 +273,7 @@ func TestUpdateTodoHandler_Authorization(t *testing.T) {
 		router.ServeHTTP(resp, req)
 
 		require.Equal(t, http.StatusOK, resp.Code)
-		var updatedTodo todo.Todo
+		var updatedTodo models.Todo
 		err := json.Unmarshal(resp.Body.Bytes(), &updatedTodo)
 		require.NoError(t, err)
 		require.Equal(t, "Admin Updated Other Todo", updatedTodo.Title)

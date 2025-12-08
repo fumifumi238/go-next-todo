@@ -2,7 +2,7 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import LoginForm from "@/components/LoginForm/LoginForm";
+import LoginForm from "@/features/auth/components/LoginForm/LoginForm";
 import * as api from "@/lib/api";
 import { AuthContext } from "@/context/AuthContext";
 

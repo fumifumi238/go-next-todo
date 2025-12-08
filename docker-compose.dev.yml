@@ -13,18 +13,3 @@ services:
       - ./backend:/app
     # 実行コマンドをairに変更
     command: air -c .air.toml
-
-  # frontend:
-  #   # Next.js開発環境はビルドが不要なのでbuildを無効化（Dockerイメージはnode:20-alpineを直接利用）
-  #   # build定義を削除するか、単に開発サーバーを起動
-
-  #   # ホットリロードのためのマウント
-  #   volumes:
-  #     # ソースコードをマウント
-  #     - ./frontend:/app
-  #     # node_modulesと.nextは匿名ボリュームで、ホストからの上書きを防ぐ
-  #     - /app/node_modules
-  #     # .nextは開発時は自動生成されるので、ローカルファイルでの上書きを防ぐ
-
-  #   # 実行コマンドを開発サーバー(next dev)に変更
-  #   command: npm run dev

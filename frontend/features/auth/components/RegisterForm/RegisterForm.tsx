@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { RegisterFormInputs, registerSchema } from "@/app/types/user";
 import { registerUser, loginUser } from "@/lib/api";
 import { useRouter } from "next/navigation";
-import FieldStatus from "@/components/FieldStatus";
+import FieldStatus from "@/features/form/FieldStatus";
 import { AuthContext } from "@/context/AuthContext";
 
 const RegisterForm: React.FC = () => {
@@ -107,6 +107,7 @@ const RegisterForm: React.FC = () => {
             <input
               id="username"
               type="text"
+              placeholder="8文字以上で入力してください"
               {...register("username")}
               className={`block w-full pl-10 pr-3 py-2 border rounded-md outline-none ${getFieldStateclassName(
                 "username"
@@ -125,6 +126,7 @@ const RegisterForm: React.FC = () => {
             <input
               id="email"
               type="email"
+              placeholder="sample@sample.com"
               {...register("email")}
               className={`block w-full pl-10 pr-3 py-2 border rounded-md outline-none ${getFieldStateclassName(
                 "email"
@@ -144,6 +146,7 @@ const RegisterForm: React.FC = () => {
             <input
               id="password"
               type="password"
+              placeholder="8文字以上＋英大/小＋数字＋記号"
               {...register("password")}
               className={`block w-full pl-10 pr-3 py-2 border rounded-md outline-none ${getFieldStateclassName(
                 "password"

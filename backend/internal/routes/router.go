@@ -26,10 +26,11 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 	// リポジトリ
 	todoRepo := repositories.NewTodoRepository(db)
 	userRepo := repositories.NewUserRepository(db)
+	resetRepo := repositories.NewMySQLResetTokenRepo(db)
 
 	// サービス
 	todoService := services.NewTodoService(todoRepo)
-	userService := services.NewUserService(userRepo)
+	userService := services.NewUserService(userRepo, resetRepo)
 	jwtService := services.NewJWTService()
 
 	// ハンドラー
@@ -47,6 +48,9 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 	})
 	r.POST("/api/register", userHandler.RegisterHandler)
 	r.POST("/api/login", userHandler.LoginHandler)
+	r.POST("/api/forgot-password", userHandler.ForgotPasswordHandler)
+	r.POST("/api/reset-password/:token", userHandler.ResetPasswordHandler)
+	r.POST("/api/reset-password", userHandler.ResetPasswordHandler)
 
 	authorized := r.Group("/")
 	authorized.Use(AuthMiddleware(jwtService))

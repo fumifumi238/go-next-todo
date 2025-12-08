@@ -37,7 +37,10 @@ func VerifyPassword(hashedPassword, password string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 }
 
-var ErrDuplicateEmail = errors.New("duplicate email")
+var (
+	ErrDuplicateEmail = errors.New("duplicate email")
+	ErrUserNotFound   = errors.New("user not found")
+)
 
 // Create は新しいユーザーをデータベースに挿入します。
 func (r *UserRepository) Create(u *models.User) (*models.User, error) {
@@ -76,10 +79,26 @@ func (r *UserRepository) FindByEmail(email string) (*models.User, error) {
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("user not found with email %s", email)
+			return nil, ErrUserNotFound
 		}
 		log.Printf("Failed to query user by email: %v", err)
 		return nil, fmt.Errorf("could not query user: %w", err)
 	}
 	return &u, nil
+}
+
+// UpdatePassword はユーザーのパスワードを更新します。
+func (r *UserRepository) UpdatePassword(userID uint, newHash string) error {
+	res, err := r.DB.Exec("UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", newHash, userID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("no rows affected")
+	}
+	return nil
 }

@@ -19,9 +19,6 @@ import (
 	"go-next-todo/backend/internal/repositories"
 	"go-next-todo/backend/internal/routes"
 	"go-next-todo/backend/internal/services"
-	"go-next-todo/backend/internal/user"
-
-	"github.com/joho/godotenv"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -30,8 +27,6 @@ import (
 
 // setupTestDB はテスト用のデータベース接続を確立し、テーブルを作成し、テストデータを投入します。
 func SetupTestDB(t *testing.T) (*sql.DB, *gin.Engine, *repositories.TodoRepository, *repositories.UserRepository) {
-
-	err := godotenv.Load("../../../.env")
 
 	dbUser := os.Getenv("TEST_DB_USER")
 	dbPass := os.Getenv("TEST_DB_PASS")
@@ -77,7 +72,7 @@ func SetupTestDB(t *testing.T) (*sql.DB, *gin.Engine, *repositories.TodoReposito
     		username VARCHAR(255) NOT NULL UNIQUE,
     		email VARCHAR(255) NOT NULL UNIQUE,
     		password_hash VARCHAR(255) NOT NULL,
-    		role VARCHAR(50) DEFAULT 'user',
+    		role ENUM('user', 'admin') NOT NULL DEFAULT 'user',
     		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     	);`
@@ -102,7 +97,7 @@ func SetupTestDB(t *testing.T) (*sql.DB, *gin.Engine, *repositories.TodoReposito
 
 	// テストユーザーの挿入
 	userRepo := repositories.NewUserRepository(db)
-	hashedPasswordUser, _ := user.HashPassword("password123")
+	hashedPasswordUser, _ := repositories.HashPassword("password123")
 	normalUser := models.User{
 		Username:     "normal_user",
 		Email:        "normal_user@example.com",
@@ -113,7 +108,7 @@ func SetupTestDB(t *testing.T) (*sql.DB, *gin.Engine, *repositories.TodoReposito
 		log.Printf("Failed to create normal_user (might exist, or duplicate entry): %v", err)
 	}
 
-	hashedPasswordAdmin, _ := user.HashPassword("adminpass")
+	hashedPasswordAdmin, _ := repositories.HashPassword("adminpass")
 	adminUser := models.User{
 		Username:     "admin_user",
 		Email:        "admin@example.com",
@@ -139,10 +134,11 @@ func SetupTestRouter(t *testing.T, db *sql.DB) *gin.Engine {
 	// リポジトリ
 	todoRepo := repositories.NewTodoRepository(db)
 	userRepo := repositories.NewUserRepository(db)
+	resetTokenRepo := repositories.NewMySQLResetTokenRepo(db)
 
 	// サービス
 	todoService := services.NewTodoService(todoRepo)
-	userService := services.NewUserService(userRepo)
+	userService := services.NewUserService(userRepo, resetTokenRepo)
 	jwtService := services.NewJWTService()
 
 	// ハンドラー
@@ -177,7 +173,7 @@ func SetupTestRouter(t *testing.T, db *sql.DB) *gin.Engine {
 }
 
 func CreateTestUser(t *testing.T, userRepo *repositories.UserRepository, username, email, password, role string) *models.User {
-	hashedPassword, err := user.HashPassword(password)
+	hashedPassword, err := repositories.HashPassword(password)
 	require.NoError(t, err)
 
 	newUser := models.User{

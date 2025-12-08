@@ -89,3 +89,38 @@ func (h *UserHandler) ProtectedHandler(c *gin.Context) {
 		"role":    userRole,
 	})
 }
+
+// ForgotPasswordHandler はパスワードリセットリクエストを処理します。
+func (h *UserHandler) ForgotPasswordHandler(c *gin.Context) {
+	var req models.UserForgotPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
+		return
+	}
+
+	err := h.userService.ForgotPasswordUser(req.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process password reset"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Password reset email sent"})
+}
+
+func (h *UserHandler) ResetPasswordHandler(c *gin.Context) {
+	var req models.UserResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
+		return
+	}
+
+	token := c.Param("token")
+
+	err := h.userService.ResetPasswordUser(token, req.Password)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Password reset successfully"})
+}

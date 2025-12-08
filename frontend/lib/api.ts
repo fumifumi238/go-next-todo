@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { RegisterFormInputs, LoginFormInputs } from "@/app/types/user";
-import { todoSchema } from "@/app/types/todo";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
@@ -22,9 +21,6 @@ const loginResponseSchema = z.object({
   user_id: z.number(),
   role: z.string(),
 });
-
-// 使われていません
-const todoResponseSchema = z.array(todoSchema);
 
 const errorResponseSchema = z.object({
   error: z.string(),
@@ -53,7 +49,7 @@ export const registerUser = async (
       };
     }
 
-    const parsed = registerResponseSchema.safeParse(data.data);
+    const parsed = registerResponseSchema.safeParse(data);
     if (!parsed.success) {
       console.error("Response validation failed:", parsed.error);
       return { error: "レスポンス形式が無効です" };
@@ -89,7 +85,7 @@ export const loginUser = async (
       };
     }
 
-    const parsed = loginResponseSchema.safeParse(data.data);
+    const parsed = loginResponseSchema.safeParse(data);
     if (!parsed.success) {
       console.error("Response validation failed:", parsed.error);
       return { error: "レスポンス形式が無効です" };
@@ -99,5 +95,74 @@ export const loginUser = async (
   } catch (error) {
     console.error("Login API error:", error);
     return { error: "ネットワークエラーによりログインに失敗しました" };
+  }
+};
+
+export const forgotPassword = async (
+  email: string
+): Promise<ApiResponse<{ message: string }>> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/forgot-password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      const errorParsed = errorResponseSchema.safeParse(data);
+      return {
+        error: errorParsed.success
+          ? errorParsed.data.error
+          : "パスワードリセットのリクエストに失敗しました",
+      };
+    }
+
+    return { data: { message: "パスワードリセットのメールを送信しました" } };
+  } catch (error) {
+    console.error("Forgot password API error:", error);
+    return {
+      error:
+        "ネットワークエラーによりパスワードリセットのリクエストに失敗しました",
+    };
+  }
+};
+
+export const resetPassword = async (
+  token: string,
+  password: string
+): Promise<ApiResponse<{ message: string }>> => {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/reset-password/${token}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ password }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      const errorParsed = errorResponseSchema.safeParse(data);
+      return {
+        error: errorParsed.success
+          ? errorParsed.data.error
+          : "パスワードリセットに失敗しました",
+      };
+    }
+
+    return { data: { message: "パスワードがリセットされました" } };
+  } catch (error) {
+    console.error("Reset password API error:", error);
+    return {
+      error: "ネットワークエラーによりパスワードリセットに失敗しました",
+    };
   }
 };

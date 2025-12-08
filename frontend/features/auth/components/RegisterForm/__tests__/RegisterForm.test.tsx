@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import RegisterForm from "@/components/RegisterForm/RegisterForm";
+import RegisterForm from "@/features/auth/components/RegisterForm/RegisterForm";
 import * as api from "@/lib/api"; // apiモジュールをモックするためにインポート
 import { useRouter } from "next/navigation";
 import { AuthContext } from "@/context/AuthContext";
@@ -73,7 +73,7 @@ describe("RegisterForm", () => {
       screen.getByLabelText(/メールアドレス/i),
       "test@example.com"
     );
-    await userEvent.type(screen.getByLabelText(/パスワード/i), "password123");
+    await userEvent.type(screen.getByLabelText(/パスワード/i), "Password123!");
 
     await userEvent.click(screen.getByRole("button", { name: /登録/i }));
 
@@ -81,11 +81,11 @@ describe("RegisterForm", () => {
       expect(mockRegisterUser).toHaveBeenCalledWith({
         username: "testuser",
         email: "test@example.com",
-        password: "password123",
+        password: "Password123!",
       });
       expect(mockLoginUser).toHaveBeenCalledWith({
         email: "test@example.com",
-        password: "password123",
+        password: "Password123!",
       });
       expect(mockLogin).toHaveBeenCalledWith("fake-jwt-token");
       expect(window.alert).toHaveBeenCalledWith(
@@ -108,7 +108,11 @@ describe("RegisterForm", () => {
     const passwordInput = screen.getByLabelText(/パスワード/i);
     const registerButton = screen.getByRole("button", { name: /登録/i });
 
-    // 各フィールドを明示的にクリア
+    // 各フィールドに有効な値を入力してからクリアしてエラーをトリガー
+    await userEvent.type(usernameInput, "a");
+    await userEvent.type(emailInput, "a@example.com");
+    await userEvent.type(passwordInput, "Password123!");
+
     await userEvent.clear(usernameInput);
     await userEvent.clear(emailInput);
     await userEvent.clear(passwordInput);
@@ -120,7 +124,7 @@ describe("RegisterForm", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/ユーザー名は3文字以上である必要があります/i)
+        screen.getByText(/ユーザー名は8文字以上である必要があります/i)
       ).toBeInTheDocument();
       expect(
         screen.getByText(/有効なメールアドレスを入力してください/i)
@@ -165,7 +169,7 @@ describe("RegisterForm", () => {
       screen.getByLabelText(/メールアドレス/i),
       "duplicate@example.com"
     );
-    await userEvent.type(screen.getByLabelText(/パスワード/i), "password123");
+    await userEvent.type(screen.getByLabelText(/パスワード/i), "Password123!");
 
     await userEvent.click(screen.getByRole("button", { name: /登録/i }));
 

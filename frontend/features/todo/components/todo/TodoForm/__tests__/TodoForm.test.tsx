@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import TodoForm from "@/components/todo/TodoForm/TodoForm";
+import TodoForm from "@/features/todo/components/todo/TodoForm/TodoForm";
 import * as api from "@/lib/api/todo";
 import { Todo } from "@/app/types/todo";
 
@@ -59,13 +59,15 @@ describe("TodoForm", () => {
     const form = container.querySelector("form");
 
     if (form) {
-      form.dispatchEvent(
-        new Event("submit", { cancelable: true, bubbles: true })
-      );
+      await act(async () => {
+        form.dispatchEvent(
+          new Event("submit", { cancelable: true, bubbles: true })
+        );
+      });
     }
 
     await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith("TODOのタイトルを入力してください");
+      expect(screen.getByText("タイトルは必須です")).toBeInTheDocument();
     });
 
     expect(mockOnAdd).not.toHaveBeenCalled();
@@ -98,7 +100,6 @@ describe("TodoForm", () => {
         {
           title: "新しいTODO",
           completed: false,
-          user_id: 1,
         },
         "fake-token"
       );

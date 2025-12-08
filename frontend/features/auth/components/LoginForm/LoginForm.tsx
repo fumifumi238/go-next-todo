@@ -5,9 +5,10 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoginFormInputs, loginSchema } from "@/app/types/user";
 import { loginUser } from "@/lib/api"; // ログインAPIをインポート
-import FieldStatus from "@/components/FieldStatus";
+import FieldStatus from "@/features/form/FieldStatus";
 import { AuthContext } from "@/context/AuthContext"; // AuthContextをインポート
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 const LoginForm: React.FC = () => {
   const { login } = useContext(AuthContext); // AuthContextからlogin関数を取得
@@ -93,6 +94,7 @@ const LoginForm: React.FC = () => {
           <input
             id="email"
             type="email"
+            placeholder="sample@sample.com"
             {...register("email")}
             className={`block w-full pl-10 pr-3 py-2 border rounded-md outline-none ${getFieldStateClassName(
               "email"
@@ -112,6 +114,7 @@ const LoginForm: React.FC = () => {
           <input
             id="password"
             type="password"
+            placeholder="8文字以上＋英大/小＋数字＋記号"
             {...register("password")}
             className={`block w-full pl-10 pr-3 py-2 border rounded-md outline-none ${getFieldStateClassName(
               "password"
@@ -138,6 +141,13 @@ const LoginForm: React.FC = () => {
           {errors.root.serverError.message}
         </p>
       )}
+      <div className="mt-4 text-center">
+        <Link
+          href="/forgot-password"
+          className="text-sm text-blue-600 hover:text-blue-800">
+          パスワードを忘れた方はこちら
+        </Link>
+      </div>
     </form>
   );
 };

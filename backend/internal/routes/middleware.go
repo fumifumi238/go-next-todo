@@ -28,7 +28,7 @@ func AuthMiddleware(jwtService *services.JWTService) gin.HandlerFunc {
 
 		claims, err := jwtService.ValidateToken(tokenString)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired jwt token"})
 			c.Abort()
 			return
 		}

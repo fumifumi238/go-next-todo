@@ -25,10 +25,13 @@ describe("API Functions", () => {
         json: async () => mockTodos,
       });
 
-      const result = await fetchTodos();
+      const result = await fetchTodos("mock-token");
 
       expect(fetch).toHaveBeenCalledWith("http://localhost:8080/api/todos", {
         cache: "no-store",
+        headers: {
+          Authorization: "Bearer mock-token",
+        },
       });
       expect(result).toEqual(mockTodos);
     });
@@ -44,8 +47,8 @@ describe("API Functions", () => {
         }),
       });
 
-      await expect(fetchTodos()).rejects.toThrow(
-        "データベースエラー (接続に失敗しました)"
+      await expect(fetchTodos("mock-token")).rejects.toThrow(
+        "データベースエラー"
       );
     });
 
@@ -54,7 +57,7 @@ describe("API Functions", () => {
         new TypeError("Failed to fetch")
       );
 
-      await expect(fetchTodos()).rejects.toThrow(
+      await expect(fetchTodos("mock-token")).rejects.toThrow(
         "バックエンドサーバーに接続できません。サーバーが起動しているか確認してください。"
       );
     });
@@ -78,12 +81,13 @@ describe("API Functions", () => {
         json: async () => createdTodo,
       });
 
-      const result = await createTodo(newTodo);
+      const result = await createTodo(newTodo, "mock-token");
 
       expect(fetch).toHaveBeenCalledWith("http://localhost:8080/api/todos", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: "Bearer mock-token",
         },
         body: JSON.stringify(newTodo),
       });
@@ -100,9 +104,9 @@ describe("API Functions", () => {
         }),
       });
 
-      await expect(createTodo({ title: "", completed: false })).rejects.toThrow(
-        "タイトルは必須です"
-      );
+      await expect(
+        createTodo({ title: "", completed: false }, "mock-token")
+      ).rejects.toThrow("タイトルは必須です");
     });
 
     it("ネットワークエラーの場合、適切なエラーメッセージを投げる", async () => {
@@ -111,7 +115,7 @@ describe("API Functions", () => {
       );
 
       await expect(
-        createTodo({ title: "新しいTODO", completed: false })
+        createTodo({ title: "新しいTODO", completed: false }, "mock-token")
       ).rejects.toThrow(
         "バックエンドサーバーに接続できません。サーバーが起動しているか確認してください。"
       );
@@ -136,12 +140,13 @@ describe("API Functions", () => {
         json: async () => updatedTodo,
       });
 
-      const result = await updateTodo(1, updateData);
+      const result = await updateTodo(1, updateData, "mock-token");
 
       expect(fetch).toHaveBeenCalledWith("http://localhost:8080/api/todos/1", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
+          Authorization: "Bearer mock-token",
         },
         body: JSON.stringify(updateData),
       });
@@ -159,7 +164,7 @@ describe("API Functions", () => {
       });
 
       await expect(
-        updateTodo(999, { title: "更新", completed: false })
+        updateTodo(999, { title: "更新", completed: false }, "mock-token")
       ).rejects.toThrow("TODOが見つかりません");
     });
 
@@ -174,7 +179,7 @@ describe("API Functions", () => {
       });
 
       await expect(
-        updateTodo(1, { title: "更新", completed: false })
+        updateTodo(1, { title: "更新", completed: false }, "mock-token")
       ).rejects.toThrow("Failed to update todo: 500 Internal Server Error");
     });
 
@@ -184,7 +189,7 @@ describe("API Functions", () => {
       );
 
       await expect(
-        updateTodo(1, { title: "更新", completed: false })
+        updateTodo(1, { title: "更新", completed: false }, "mock-token")
       ).rejects.toThrow(
         "バックエンドサーバーに接続できません。サーバーが起動しているか確認してください。"
       );
@@ -197,10 +202,13 @@ describe("API Functions", () => {
         ok: true,
       });
 
-      await deleteTodo(1);
+      await deleteTodo(1, "mock-token");
 
       expect(fetch).toHaveBeenCalledWith("http://localhost:8080/api/todos/1", {
         method: "DELETE",
+        headers: {
+          Authorization: "Bearer mock-token",
+        },
       });
     });
 
@@ -214,7 +222,9 @@ describe("API Functions", () => {
         }),
       });
 
-      await expect(deleteTodo(999)).rejects.toThrow("TODOが見つかりません");
+      await expect(deleteTodo(999, "mock-token")).rejects.toThrow(
+        "TODOが見つかりません"
+      );
     });
 
     it("JSONパースに失敗した場合、デフォルトエラーメッセージを投げる", async () => {
@@ -227,7 +237,7 @@ describe("API Functions", () => {
         },
       });
 
-      await expect(deleteTodo(1)).rejects.toThrow(
+      await expect(deleteTodo(1, "mock-token")).rejects.toThrow(
         "Failed to delete todo: 500 Internal Server Error"
       );
     });
@@ -237,7 +247,7 @@ describe("API Functions", () => {
         new TypeError("Failed to fetch")
       );
 
-      await expect(deleteTodo(1)).rejects.toThrow(
+      await expect(deleteTodo(1, "mock-token")).rejects.toThrow(
         "バックエンドサーバーに接続できません。サーバーが起動しているか確認してください。"
       );
     });

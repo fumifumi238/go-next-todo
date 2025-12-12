@@ -1,5 +1,5 @@
 package database
-
+// db接続設定を行うディレクトリ
 import (
 	"database/sql"
 	"fmt"

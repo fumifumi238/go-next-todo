@@ -1,3 +1,4 @@
+// Package modelsはTodoを定義します。
 package models
 
 import (

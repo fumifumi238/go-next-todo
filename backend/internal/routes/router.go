@@ -1,3 +1,4 @@
+// Package routesはroutingを行います。
 package routes
 
 import (
@@ -16,6 +17,7 @@ import (
 func SetupRouter(db *sql.DB) *gin.Engine {
 	r := gin.Default()
 
+	// CORS対策
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{"http://localhost:3000"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}

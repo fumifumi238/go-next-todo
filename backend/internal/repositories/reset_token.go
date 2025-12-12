@@ -1,3 +1,4 @@
+// Package repositories はデータベース操作を行うリポジトリを提供します。
 package repositories
 
 import (

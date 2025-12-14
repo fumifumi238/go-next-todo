@@ -45,7 +45,7 @@ const LoginForm: React.FC = () => {
 
       // ログイン成功時の処理
       if (response.data?.token) {
-        login(response.data.token);
+        login(response.data.token, response.data.role);
         alert("ログインに成功しました！");
         reset();
         router.push("/");

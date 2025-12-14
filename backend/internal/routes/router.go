@@ -63,6 +63,12 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 		authorized.PUT("/api/todos/:id", todoHandler.UpdateTodoHandler)
 		authorized.DELETE("/api/todos/:id", todoHandler.DeleteTodoHandler)
 		authorized.GET("/api/protected", userHandler.ProtectedHandler)
+
+		// 管理者専用ルート
+		admin := authorized.Group("/")
+		{
+			admin.GET("/api/admin/users", userHandler.FindAllUsersHandler)
+		}
 	}
 
 	return r

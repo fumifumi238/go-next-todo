@@ -14,7 +14,7 @@ export default function Page() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { token, logout } = useContext(AuthContext);
+  const { token, role, logout } = useContext(AuthContext);
   const router = useRouter();
 
   useEffect(() => {
@@ -69,6 +69,13 @@ export default function Page() {
             className="mb-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors">
             ログアウト
           </button>
+          {role === "admin" && (
+            <button
+              onClick={() => router.push("/admin/users")}
+              className="mb-4 ml-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
+              ユーザー管理
+            </button>
+          )}
           {token && <TodoForm onAdd={loadTodos} token={token} />}{" "}
           {/* tokenを渡す */}
           {error && (

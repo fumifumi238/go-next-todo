@@ -25,7 +25,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-// setupTestDB はテスト用のデータベース接続を確立し、テーブルを作成し、テストデータを投入します。
+// SetupTestDB はテスト用のデータベース接続を確立し、テーブルを作成し、テストデータを投入します。
 func SetupTestDB(t *testing.T) (*sql.DB, *gin.Engine, *repositories.TodoRepository, *repositories.UserRepository) {
 
 	dbUser := os.Getenv("TEST_DB_USER")
@@ -128,7 +128,7 @@ func SetupTestDB(t *testing.T) (*sql.DB, *gin.Engine, *repositories.TodoReposito
 	return db, router, todoRepo, userRepo
 }
 
-// setupTestRouter はテスト用のGinルーターとリポジトリをセットアップします。
+// SetupTestRouter はテスト用のGinルーターとリポジトリをセットアップします。
 func SetupTestRouter(t *testing.T, db *sql.DB) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	// リポジトリ
@@ -168,6 +168,12 @@ func SetupTestRouter(t *testing.T, db *sql.DB) *gin.Engine {
 		authorized.PUT("/api/todos/:id", todoHandler.UpdateTodoHandler)
 		authorized.DELETE("/api/todos/:id", todoHandler.DeleteTodoHandler)
 		authorized.GET("/api/protected", userHandler.ProtectedHandler)
+
+		// 管理者専用ルート
+		admin := authorized.Group("/")
+		{
+			admin.GET("/api/admin/users", userHandler.FindAllUsersHandler)
+		}
 	}
 	return r
 }
@@ -190,7 +196,7 @@ func CreateTestUser(t *testing.T, userRepo *repositories.UserRepository, usernam
 	return createdUser
 }
 
-// createTestTodo はテスト用のTODOを作成し、データベースに保存します。
+// CreateTestTodo はテスト用のTODOを作成し、データベースに保存します。
 func CreateTestTodo(t *testing.T, router *gin.Engine, token, title string, completed bool) *models.Todo {
 	todoPayload := map[string]interface{}{
 		"title":     title,

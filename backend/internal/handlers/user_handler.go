@@ -124,3 +124,25 @@ func (h *UserHandler) ResetPasswordHandler(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Password reset successfully"})
 }
+
+// FindAllUsersHandler はすべてのユーザーを取得します（管理者専用）。
+func (h *UserHandler) FindAllUsersHandler(c *gin.Context) {
+	userRole, exists := c.Get("user_role")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "User role not found in token claims"})
+		return
+	}
+
+	if userRole != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied: admin role required"})
+		return
+	}
+
+	users, err := h.userService.FindAllUsers()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve users"})
+		return
+	}
+
+	c.JSON(http.StatusOK, users)
+}

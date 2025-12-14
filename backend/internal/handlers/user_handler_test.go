@@ -239,3 +239,63 @@ func TestForgotPassword_InvalidEmail(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, response["error"], "Invalid request payload")
 }
+
+func TestFindAllUsers_AdminSuccess(t *testing.T) {
+	db, r, _, _ := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	// 管理者トークンを取得
+	token, err := testutil.LoginAndGetToken(t, r, "admin@example.com", "adminpass")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, token)
+
+	req, _ := http.NewRequest("GET", "/api/admin/users", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code, "Expected HTTP Status Code 200 OK")
+	var users []models.User
+	err = json.Unmarshal(w.Body.Bytes(), &users)
+	assert.NoError(t, err)
+	assert.Greater(t, len(users), 0, "Expected at least one user")
+	// パスワードハッシュが空であることを確認
+	for _, user := range users {
+		assert.Empty(t, user.PasswordHash, "Password hash should not be returned")
+	}
+}
+
+func TestFindAllUsers_UserForbidden(t *testing.T) {
+	db, r, _, _ := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	// 通常ユーザートークンを取得
+	token, err := testutil.LoginAndGetToken(t, r, "normal_user@example.com", "password123")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, token)
+
+	req, _ := http.NewRequest("GET", "/api/admin/users", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code, "Expected HTTP Status Code 403 Forbidden")
+	var response map[string]string
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Contains(t, response["error"], "Access denied: admin role required")
+}
+
+func TestFindAllUsers_Unauthorized(t *testing.T) {
+	db, r, _, _ := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	req, _ := http.NewRequest("GET", "/api/admin/users", nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code, "Expected HTTP Status Code 401 Unauthorized")
+}

@@ -66,3 +66,13 @@ export const resetPasswordSchema = z
 
 // パスワードリセットリクエストの型定義
 export type ResetPasswordFormInputs = z.infer<typeof resetPasswordSchema>;
+
+// ユーザー情報の型定義
+export interface User {
+  id: number;
+  username: string;
+  email: string;
+  role: "user" | "admin";
+  created_at: string;
+  updated_at: string;
+}

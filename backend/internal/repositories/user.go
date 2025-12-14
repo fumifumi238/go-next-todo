@@ -103,3 +103,33 @@ func (r *UserRepository) UpdatePassword(userID uint, newHash string) error {
 	}
 	return nil
 }
+
+// FindAllUser はすべてのユーザーを取得します。
+func (r *UserRepository) FindAllUser() ([]*models.User, error) {
+	query := "SELECT id, username, email, role, created_at, updated_at FROM users ORDER BY created_at DESC"
+
+	rows, err := r.DB.Query(query)
+	if err != nil {
+		log.Printf("Failed to query users: %v", err)
+		return nil, fmt.Errorf("could not query users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []*models.User
+	for rows.Next() {
+		var u models.User
+		err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.Role, &u.CreatedAt, &u.UpdatedAt)
+
+		if err != nil {
+			log.Printf("Failed to scan user: %v", err)
+			return nil, fmt.Errorf("could not scan user: %w", err)
+		}
+		users = append(users, &u)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating users: %w", err)
+	}
+
+	return users, nil
+}

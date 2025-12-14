@@ -181,3 +181,16 @@ func (s *UserService) sendPasswordResetEmail(email, resetURL string) error {
 
 	return nil
 }
+
+// FindAllUsers はすべてのユーザーを取得します。
+func (s *UserService) FindAllUsers() ([]*models.User, error) {
+	users, err := s.userRepo.FindAllUser()
+	if err != nil {
+		return nil, err
+	}
+	// パスワードハッシュを除去
+	for _, user := range users {
+		user.PasswordHash = ""
+	}
+	return users, nil
+}

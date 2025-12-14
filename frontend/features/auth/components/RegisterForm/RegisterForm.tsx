@@ -57,7 +57,7 @@ const RegisterForm: React.FC = () => {
           console.error("自動ログインエラー:", loginResponse.error);
           router.push("/login"); // 自動ログイン失敗時はログインページへ
         } else if (loginResponse.data?.token) {
-          login(loginResponse.data.token); // ログイン成功時、AuthContextにトークンをセット
+          login(loginResponse.data.token, "user"); // ログイン成功時、AuthContextにトークンとロールをセット（登録時はuser）
           reset(); // フォームをリセット
           router.push("/"); // ログイン成功後にルートパスにリダイレクト
         } else {

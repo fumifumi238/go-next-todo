@@ -337,3 +337,95 @@ func TestDeleteTodoHandler_Authorization(t *testing.T) {
 		require.ErrorIs(t, err, repositories.ErrTodoNotFound)
 	})
 }
+
+func TestFindAllTodosAdminHandler_Success(t *testing.T) {
+	db, router, _, _ := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	tokenAdmin, err := testutil.LoginAndGetToken(t, router, "admin@example.com", "adminpass")
+	require.NoError(t, err)
+
+	// テスト用TODOを作成
+	tokenNormal, err := testutil.LoginAndGetToken(t, router, "normal_user@example.com", "password123")
+	require.NoError(t, err)
+	_ = testutil.CreateTestTodo(t, router, tokenNormal, "Admin Test Todo 1", false)
+	_ = testutil.CreateTestTodo(t, router, tokenNormal, "Admin Test Todo 2", true)
+
+	// 管理者でリクエスト
+	req, _ := http.NewRequest(http.MethodGet, "/api/admin/todos", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenAdmin)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	var todos []*models.Todo
+	err = json.Unmarshal(resp.Body.Bytes(), &todos)
+	require.NoError(t, err)
+	// 作成したTODOが取得できるはず
+	require.GreaterOrEqual(t, len(todos), 2)
+}
+
+func TestFindAllTodosAdminHandler_Unauthorized(t *testing.T) {
+	db, router, _, _ := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	tokenNormal, err := testutil.LoginAndGetToken(t, router, "normal_user@example.com", "password123")
+	require.NoError(t, err)
+
+	// 一般ユーザーでリクエスト（403になるはず）
+	req, _ := http.NewRequest(http.MethodGet, "/api/admin/todos", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenNormal)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	require.Equal(t, http.StatusForbidden, resp.Code)
+}
+
+func TestDeleteTodoAdminHandler_Success(t *testing.T) {
+	db, router, todoRepo, _ := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	tokenAdmin, err := testutil.LoginAndGetToken(t, router, "admin@example.com", "adminpass")
+	require.NoError(t, err)
+
+	// テスト用TODOを作成
+	tokenNormal, err := testutil.LoginAndGetToken(t, router, "normal_user@example.com", "password123")
+	require.NoError(t, err)
+	todo := testutil.CreateTestTodo(t, router, tokenNormal, "Todo to Delete by Admin", false)
+
+	// 管理者で削除リクエスト
+	req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/api/admin/todos/%d", todo.ID), nil)
+	req.Header.Set("Authorization", "Bearer "+tokenAdmin)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	require.Equal(t, http.StatusNoContent, resp.Code)
+
+	// 削除されたことを確認
+	_, err = todoRepo.FindByID(todo.ID)
+	require.ErrorIs(t, err, repositories.ErrTodoNotFound)
+}
+
+func TestDeleteTodoAdminHandler_Unauthorized(t *testing.T) {
+	db, router, todoRepo, _ := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	tokenNormal, err := testutil.LoginAndGetToken(t, router, "normal_user@example.com", "password123")
+	require.NoError(t, err)
+
+	// テスト用TODOを作成
+	todo := testutil.CreateTestTodo(t, router, tokenNormal, "Todo to Try Delete by Normal User", false)
+
+	// 一般ユーザーで削除リクエスト（403になるはず）
+	req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/api/admin/todos/%d", todo.ID), nil)
+	req.Header.Set("Authorization", "Bearer "+tokenNormal)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	require.Equal(t, http.StatusForbidden, resp.Code)
+
+	// 削除されていないことを確認
+	_, err = todoRepo.FindByID(todo.ID)
+	require.NoError(t, err)
+}

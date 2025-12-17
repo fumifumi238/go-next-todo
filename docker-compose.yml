@@ -8,6 +8,7 @@ services:
       - "8080:8080"
     env_file:
       - .env
+      - backend/.env
     depends_on:
       - db
 
@@ -21,5 +22,15 @@ services:
     volumes:
       - db-data:/var/lib/mysql
 
+  migrate:
+    image: migrate/migrate
+    volumes:
+      - ./migrations:/migrations
+    entrypoint: [ "migrate", "-path=/migrations", "-database=${DB_URL}" ]
+    env_file:
+      - .env
+    depends_on:
+      - db
+    restart: "no"
 volumes:
   db-data:

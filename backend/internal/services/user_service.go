@@ -160,9 +160,14 @@ func (s *UserService) sendPasswordResetEmail(email, resetURL string) error {
 	from := os.Getenv("SMTP_USER")
 	password := os.Getenv("SMTP_PASSWORD")
 	to := []string{email}
-
-	smtpHost := "sandbox.smtp.mailtrap.io"
-	smtpPort := "2525"
+	smtpHost := os.Getenv("SMTP_HOST")
+	if smtpHost == "" {
+		smtpHost = "sandbox.smtp.mailtrap.io"
+	}
+	smtpPort := os.Getenv("SMTP_PORT")
+	if smtpPort == "" {
+		smtpPort = "2525"
+	}
 
 	// 件名と本文
 	message := []byte(fmt.Sprintf(

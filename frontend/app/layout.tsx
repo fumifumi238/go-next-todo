@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/context/AuthContext";
 import { cookies } from "next/headers";
+import jwt from "jsonwebtoken";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -27,11 +28,19 @@ export default async function RootLayout({
   const cookieStore = await cookies();
   const token = cookieStore.get("token")?.value ?? null;
 
+  let initialRole: string | null = null;
+  if (token) {
+    const decoded = jwt.decode(token) as jwt.JwtPayload;
+    initialRole = decoded?.role || null;
+  }
+
   return (
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <AuthProvider initialToken={token} initialRole={null}>{children}</AuthProvider>
+        <AuthProvider initialToken={token} initialRole={initialRole}>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

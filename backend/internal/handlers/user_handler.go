@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -12,13 +13,14 @@ import (
 
 // UserHandler はユーザー関連のハンドラーを管理します。
 type UserHandler struct {
-	userService *services.UserService
-	jwtService  *services.JWTService
+	userService     *services.UserService
+	jwtService      *services.JWTService
+	adminOTPService *services.AdminOTPService
 }
 
 // NewUserHandler は新しいUserHandlerを作成します。
-func NewUserHandler(userService *services.UserService, jwtService *services.JWTService) *UserHandler {
-	return &UserHandler{userService: userService, jwtService: jwtService}
+func NewUserHandler(userService *services.UserService, jwtService *services.JWTService, adminOTPService *services.AdminOTPService) *UserHandler {
+	return &UserHandler{userService: userService, jwtService: jwtService, adminOTPService: adminOTPService}
 }
 
 // RegisterHandler はユーザー登録を処理します。
@@ -145,4 +147,67 @@ func (h *UserHandler) FindAllUsersHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, users)
+}
+
+// AdminLoginStep1 は管理者ログインのステップ1（パスワード認証 + OTP送信）を処理します。
+func (h *UserHandler) AdminLoginStep1(c *gin.Context) {
+	var req models.UserLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
+		return
+	}
+
+	user, err := h.userService.AuthenticateUser(req)
+	if err != nil || user.Role != "admin" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		return
+	}
+
+	otp, err := h.adminOTPService.GenerateOTP()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "OTP generation failed"})
+		return
+	}
+
+	expiresAt := time.Now().Add(5 * time.Minute)
+	err = h.adminOTPService.CreateOTP(user.ID, otp, expiresAt)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "OTP save failed"})
+		return
+	}
+
+	err = h.adminOTPService.SendOTP(user.Email, otp)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Email send failed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "OTP sent to email", "user_id": user.ID, "role": user.Role})
+}
+
+// AdminLoginStep2 は管理者ログインのステップ2（OTP検証 + JWT発行）を処理します。
+func (h *UserHandler) AdminLoginStep2(c *gin.Context) {
+	var req struct {
+		UserID int    `json:"user_id" binding:"required"`
+		OTP    string `json:"otp" binding:"required,len=6"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
+		return
+	}
+
+	err := h.adminOTPService.ValidateAndDeleteOTP(req.UserID, req.OTP)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired OTP"})
+		return
+	}
+
+	// JWT発行（emailは不要なので空）
+	token, err := h.jwtService.GenerateToken(uint(req.UserID), "", "admin")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Token generation failed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"token": token})
 }

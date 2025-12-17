@@ -25,7 +25,7 @@ describe("RegisterForm", () => {
   const renderWithAuthContext = (ui: React.ReactElement) => {
     return render(
       <AuthContext.Provider
-        value={{ token: null, login: mockLogin, logout: jest.fn() }}>
+        value={{ token: null, role: null, login: mockLogin, logout: jest.fn() }}>
         {ui}
       </AuthContext.Provider>
     );
@@ -87,7 +87,7 @@ describe("RegisterForm", () => {
         email: "test@example.com",
         password: "Password123!",
       });
-      expect(mockLogin).toHaveBeenCalledWith("fake-jwt-token");
+      expect(mockLogin).toHaveBeenCalledWith("fake-jwt-token", "user");
       expect(window.alert).toHaveBeenCalledWith(
         "ユーザー登録が成功しました！自動的にログインします。"
       );

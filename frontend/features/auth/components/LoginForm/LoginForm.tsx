@@ -50,7 +50,6 @@ const LoginForm: React.FC = () => {
         reset();
         router.push("/");
       } else {
-        // 予期せぬAPIレスポンス (dataまたはtokenがない場合)
         const errorMessage =
           "予期せぬAPIレスポンス: トークンが見つかりません。";
         setError("root.serverError", {
@@ -60,7 +59,6 @@ const LoginForm: React.FC = () => {
         console.error(errorMessage, response);
       }
     } catch (error) {
-      // ネットワークエラーなどの予期せぬ例外
       const errorMessage = "ネットワークエラーによりログインに失敗しました。";
       setError("root.serverError", {
         type: "manual",

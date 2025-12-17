@@ -29,14 +29,16 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 	todoRepo := repositories.NewTodoRepository(db)
 	userRepo := repositories.NewUserRepository(db)
 	resetRepo := repositories.NewMySQLResetTokenRepo(db)
+	adminOTPRepo := repositories.NewAdminOTPRepository(db)
 
 	// サービス
 	todoService := services.NewTodoService(todoRepo)
 	userService := services.NewUserService(userRepo, resetRepo)
 	jwtService := services.NewJWTService()
+	adminOTPService := services.NewAdminOTPService(adminOTPRepo)
 
 	// ハンドラー
-	userHandler := handlers.NewUserHandler(userService, jwtService)
+	userHandler := handlers.NewUserHandler(userService, jwtService, adminOTPService)
 	todoHandler := handlers.NewTodoHandler(todoService)
 
 	// ルーティング
@@ -53,6 +55,8 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 	r.POST("/api/forgot-password", userHandler.ForgotPasswordHandler)
 	r.POST("/api/reset-password/:token", userHandler.ResetPasswordHandler)
 	r.POST("/api/reset-password", userHandler.ResetPasswordHandler)
+	r.POST("/api/admin/login/step1", userHandler.AdminLoginStep1)
+	r.POST("/api/admin/login/step2", userHandler.AdminLoginStep2)
 
 	authorized := r.Group("/")
 	authorized.Use(AuthMiddleware(jwtService))
@@ -65,9 +69,12 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 		authorized.GET("/api/protected", userHandler.ProtectedHandler)
 
 		// 管理者専用ルート
-		admin := authorized.Group("/")
+		admin := authorized.Group("/api/admin")
 		{
-			admin.GET("/api/admin/users", userHandler.FindAllUsersHandler)
+			admin.GET("/users", userHandler.FindAllUsersHandler)
+			admin.GET("/todos", todoHandler.FindAllTodosAdminHandler)
+			admin.GET("/todos/user/:user_id", todoHandler.GetTodosByUserIDHandler)
+			admin.DELETE("/todos/:id", todoHandler.DeleteTodoAdminHandler)
 		}
 	}
 

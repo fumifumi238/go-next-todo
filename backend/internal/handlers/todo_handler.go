@@ -226,3 +226,99 @@ func (h *TodoHandler) GetTodoByIDHandler(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, todo)
 }
+
+// FindAllTodosAdminHandler はすべてのTodoを取得します（管理者専用）。
+func (h *TodoHandler) FindAllTodosAdminHandler(c *gin.Context) {
+	userRoleVal, exists := c.Get("user_role")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "User role not found in context"})
+		return
+	}
+	userRole, ok := userRoleVal.(string)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user role type in context"})
+		return
+	}
+
+	if userRole != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied: admin role required"})
+		return
+	}
+
+	todos, err := h.todoService.GetTodos(0, userRole) // userIDはadminの場合無視される
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch todos"})
+		return
+	}
+	c.JSON(http.StatusOK, todos)
+}
+
+// DeleteTodoAdminHandler は指定IDのTodoを削除します（管理者専用）。
+func (h *TodoHandler) DeleteTodoAdminHandler(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	userRoleVal, exists := c.Get("user_role")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "User role not found in context"})
+		return
+	}
+	userRole, ok := userRoleVal.(string)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user role type in context"})
+		return
+	}
+
+	if userRole != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied: admin role required"})
+		return
+	}
+
+	err = h.todoService.DeleteTodo(id, 0, userRole) // userIDはadminの場合無視される
+	if err != nil {
+		if err == repositories.ErrTodoNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Todo not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete todo"})
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// GetTodosByUserIDHandler は指定ユーザーのTodoを取得します（管理者専用）。
+func (h *TodoHandler) GetTodosByUserIDHandler(c *gin.Context) {
+	userIDStr := c.Param("user_id")
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID format"})
+		return
+	}
+
+	userRoleVal, exists := c.Get("user_role")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "User role not found in context"})
+		return
+	}
+	userRole, ok := userRoleVal.(string)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user role type in context"})
+		return
+	}
+
+	if userRole != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied: admin role required"})
+		return
+	}
+
+	todos, err := h.todoService.GetTodosByUserID(userID, userRole)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch todos"})
+		return
+	}
+	c.JSON(http.StatusOK, todos)
+}

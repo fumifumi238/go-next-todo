@@ -13,7 +13,6 @@ export default function Page() {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const { token, role, logout } = useContext(AuthContext);
   const router = useRouter();
 

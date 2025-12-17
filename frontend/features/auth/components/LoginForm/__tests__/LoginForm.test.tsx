@@ -35,7 +35,7 @@ describe("LoginForm", () => {
   const renderWithAuthContext = (ui: React.ReactElement) => {
     return render(
       <AuthContext.Provider
-        value={{ token: null, login: mockLogin, logout: jest.fn() }}>
+        value={{ token: null, role: null, login: mockLogin, logout: jest.fn() }}>
         {ui}
       </AuthContext.Provider>
     );
@@ -71,7 +71,7 @@ describe("LoginForm", () => {
         email: "test@example.com",
         password: "password123",
       });
-      expect(mockLogin).toHaveBeenCalledWith("fake-jwt-token"); // AuthContextのloginが呼ばれる
+      expect(mockLogin).toHaveBeenCalledWith("fake-jwt-token", "user"); // AuthContextのloginが呼ばれる
       expect(window.alert).toHaveBeenCalledWith("ログインに成功しました！");
       expect(mockPush).toHaveBeenCalledWith("/"); // ルートページにリダイレクト
     });

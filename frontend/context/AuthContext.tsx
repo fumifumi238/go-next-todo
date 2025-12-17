@@ -30,12 +30,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
 }) => {
   // 初期値を lazy initializer で読み込む
   const [token, setToken] = useState<string | null>(initialToken);
-  const [role, setRole] = useState<string | null>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("role") || initialRole;
-    }
-    return initialRole;
-  });
+  const [role, setRole] = useState<string | null>(initialRole);
   const login = useCallback((newToken: string, userRole: string) => {
     setToken(newToken);
     setRole(userRole);

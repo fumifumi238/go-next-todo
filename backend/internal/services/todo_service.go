@@ -21,11 +21,8 @@ func (s *TodoService) CreateTodo(todo *models.Todo, userID int) (*models.Todo, e
 	return s.todoRepo.Create(todo)
 }
 
-// GetTodos はユーザーのTodoを取得します。adminの場合は全Todo。
+// GetTodos はユーザーのTodoを取得します。adminの場合も自分のTodoのみ。
 func (s *TodoService) GetTodos(userID int, userRole string) ([]*models.Todo, error) {
-	if userRole == "admin" {
-		return s.todoRepo.FindAll()
-	}
 	return s.todoRepo.FindByUserID(userID)
 }
 
@@ -64,4 +61,12 @@ func (s *TodoService) DeleteTodo(id, userID int, userRole string) error {
 		return repositories.ErrTodoForbidden
 	}
 	return s.todoRepo.Delete(id)
+}
+
+// GetTodosByUserID は指定ユーザーのTodoを取得します（管理者専用）。
+func (s *TodoService) GetTodosByUserID(targetUserID int, requesterRole string) ([]*models.Todo, error) {
+	if requesterRole != "admin" {
+		return nil, repositories.ErrTodoForbidden
+	}
+	return s.todoRepo.FindByUserID(targetUserID)
 }

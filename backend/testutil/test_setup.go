@@ -170,9 +170,11 @@ func SetupTestRouter(t *testing.T, db *sql.DB) *gin.Engine {
 		authorized.GET("/api/protected", userHandler.ProtectedHandler)
 
 		// 管理者専用ルート
-		admin := authorized.Group("/")
+		admin := authorized.Group("/api/admin")
 		{
-			admin.GET("/api/admin/users", userHandler.FindAllUsersHandler)
+			admin.GET("/users", userHandler.FindAllUsersHandler)
+			admin.GET("/todos", todoHandler.FindAllTodosAdminHandler)
+			admin.DELETE("/todos/:id", todoHandler.DeleteTodoAdminHandler)
 		}
 	}
 	return r

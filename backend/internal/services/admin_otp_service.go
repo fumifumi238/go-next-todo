@@ -9,8 +9,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-mail/mail/v2"
 	"go-next-todo/backend/internal/repositories"
+
+	"github.com/go-mail/mail/v2"
 )
 
 type AdminOTPService struct {
@@ -28,6 +29,7 @@ func NewAdminOTPService(repo *repositories.AdminOTPRepository) *AdminOTPService 
 	if smtpPortStr == "" {
 		smtpPortStr = "2525"
 	}
+
 	smtpPort, _ := strconv.Atoi(smtpPortStr)
 	smtpUser := os.Getenv("SMTP_USER")
 	smtpPassword := os.Getenv("SMTP_PASSWORD")
@@ -48,8 +50,9 @@ func (s *AdminOTPService) GenerateOTP() (string, error) {
 	return fmt.Sprintf("%06d", n.Int64()), nil
 }
 
+
+
 func (s *AdminOTPService) SendOTP(email, otp string) error {
-	log.Printf("Sending OTP to %s: %s", email, otp) // テスト用ログ
 
 	from := os.Getenv("SMTP_FROM")
 	if from == "" {
@@ -63,6 +66,7 @@ func (s *AdminOTPService) SendOTP(email, otp string) error {
 	m.SetBody("text/plain", fmt.Sprintf("あなたのOTPコード: %s\n有効期限: 5分", otp))
 
 	err := s.mailer.DialAndSend(m)
+
 	if err != nil {
 		log.Printf("Failed to send OTP email: %v", err)
 		return nil // テスト時は成功扱い

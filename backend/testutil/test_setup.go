@@ -1,3 +1,4 @@
+// Package testutil はテスト用のdbを設定します。
 package testutil
 
 import (
@@ -135,14 +136,16 @@ func SetupTestRouter(t *testing.T, db *sql.DB) *gin.Engine {
 	todoRepo := repositories.NewTodoRepository(db)
 	userRepo := repositories.NewUserRepository(db)
 	resetTokenRepo := repositories.NewMySQLResetTokenRepo(db)
+	adminOTPRepo := repositories.NewAdminOTPRepository(db)
 
 	// サービス
 	todoService := services.NewTodoService(todoRepo)
 	userService := services.NewUserService(userRepo, resetTokenRepo)
 	jwtService := services.NewJWTService()
+	adminOTPService := services.NewAdminOTPService(adminOTPRepo)
 
 	// ハンドラー
-	userHandler := handlers.NewUserHandler(userService, jwtService)
+	userHandler := handlers.NewUserHandler(userService, jwtService,adminOTPService)
 	todoHandler := handlers.NewTodoHandler(todoService)
 	r := gin.Default()
 

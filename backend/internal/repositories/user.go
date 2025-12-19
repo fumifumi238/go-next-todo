@@ -16,11 +16,11 @@ import (
 
 // UserRepository はデータベース操作を行うための構造体です。
 type UserRepository struct {
-	DB *sql.DB
+	DB DataStore
 }
 
 // NewUserRepository は新しいUserRepositoryインスタンスを作成します。
-func NewUserRepository(db *sql.DB) *UserRepository {
+func NewUserRepository(db DataStore) *UserRepository {
 	return &UserRepository{DB: db}
 }
 
@@ -119,7 +119,6 @@ func (r *UserRepository) FindAllUser() ([]*models.User, error) {
 	for rows.Next() {
 		var u models.User
 		err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.Role, &u.CreatedAt, &u.UpdatedAt)
-
 		if err != nil {
 			log.Printf("Failed to scan user: %v", err)
 			return nil, fmt.Errorf("could not scan user: %w", err)

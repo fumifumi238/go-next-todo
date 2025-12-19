@@ -51,7 +51,6 @@ func (s *JWTService) ValidateToken(tokenString string) (*models.JWTClaims, error
 		}
 		return s.secret, nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +77,6 @@ func (s *JWTService) ValidateToken(tokenString string) (*models.JWTClaims, error
 
 	return nil, fmt.Errorf("invalid token")
 }
-
 
 // ValidatePasswordResetToken はリセットトークンを検証し user_id を返す
 func (s *JWTService) ValidatePasswordResetToken(tokenString string) (uint, error) {

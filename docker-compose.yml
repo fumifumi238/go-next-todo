@@ -3,7 +3,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: go-backend
     ports:
       - "8080:8080"
     env_file:
@@ -14,7 +13,6 @@ services:
 
   db:
     image: mysql:8.4
-    container_name: mysql-db
     env_file:
       - .env
     ports:

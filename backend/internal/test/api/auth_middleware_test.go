@@ -13,10 +13,10 @@ import (
 )
 
 func TestAuthMiddleware_ValidToken(t *testing.T) {
-	db, r, _, _ := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, r, _, userRepo := testutil.SetupTestDB(t)
 
-	token, err := testutil.LoginAndGetToken(t, r, "normal_user@example.com", "password123")
+	testutil.CreateTestUser(t, userRepo, "testuser", "test@example.com", "password123", "user")
+	token, err := testutil.LoginAndGetToken(t, r, "test@example.com", "password123")
 	require.NoError(t, err)
 
 	req, _ := http.NewRequest("GET", "/api/protected", nil)
@@ -30,14 +30,13 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
 	assert.Equal(t, "Access granted", response["message"])
-	assert.Equal(t, float64(1), response["user_id"]) // user_idはfloat64でデコードされる
-	assert.Equal(t, "normal_user@example.com", response["email"])
+	assert.NotZero(t, response["user_id"]) // user_idが存在することを確認
+	assert.Equal(t, "test@example.com", response["email"])
 	assert.Equal(t, "user", response["role"])
 }
 
 func TestAuthMiddleware_InvalidToken(t *testing.T) {
-	db, r, _, _ := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, r, _, _ := testutil.SetupTestDB(t)
 
 	req, _ := http.NewRequest("GET", "/api/protected", nil)
 	req.Header.Set("Authorization", "Bearer invalid.jwt.token") // 不正なトークン
@@ -53,8 +52,7 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 }
 
 func TestAuthMiddleware_NoToken(t *testing.T) {
-	db, r, _, _ := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, r, _, _ := testutil.SetupTestDB(t)
 
 	req, _ := http.NewRequest("GET", "/api/protected", nil) // トークンなし
 	w := httptest.NewRecorder()

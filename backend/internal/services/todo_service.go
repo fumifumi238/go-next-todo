@@ -26,6 +26,14 @@ func (s *TodoService) GetTodos(userID int, userRole string) ([]*models.Todo, err
 	return s.todoRepo.FindByUserID(userID)
 }
 
+// GetAllTodos はすべてのTodoを取得します（管理者専用）。
+func (s *TodoService) GetAllTodos(userRole string) ([]*models.Todo, error) {
+	if userRole != "admin" {
+		return nil, repositories.ErrTodoForbidden
+	}
+	return s.todoRepo.FindAll()
+}
+
 // GetTodoByID は指定IDのTodoを取得し、認可チェックを行います。
 func (s *TodoService) GetTodoByID(id, userID int, userRole string) (*models.Todo, error) {
 	todo, err := s.todoRepo.FindByID(id)

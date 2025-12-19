@@ -19,10 +19,10 @@ type ResetTokenRepository interface {
 }
 
 type MySQLResetTokenRepo struct {
-	DB *sql.DB
+	DB DataStore
 }
 
-func NewMySQLResetTokenRepo(db *sql.DB) *MySQLResetTokenRepo {
+func NewMySQLResetTokenRepo(db DataStore) *MySQLResetTokenRepo {
 	return &MySQLResetTokenRepo{DB: db}
 }
 
@@ -35,11 +35,8 @@ func (r *MySQLResetTokenRepo) Save(t *models.PasswordResetToken) error {
 }
 
 func (r *MySQLResetTokenRepo) FindByToken(token string) (*models.PasswordResetToken, error) {
-	log.Println("[FindByToken] START ----------------------------")
-	log.Println("[FindByToken] Searching token:", token)
 
 	query := "SELECT id, user_id, token, expires_at, used_at FROM password_reset_tokens WHERE token = ?"
-	log.Println("[FindByToken] SQL:", query)
 
 	row := r.DB.QueryRow(query, token)
 
@@ -47,7 +44,6 @@ func (r *MySQLResetTokenRepo) FindByToken(token string) (*models.PasswordResetTo
 	var usedAt sql.NullTime
 
 	err := row.Scan(&pr.ID, &pr.UserID, &pr.Token, &pr.ExpiresAt, &usedAt)
-
 	// --- Scan エラーの詳細表示 ---
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -59,21 +55,12 @@ func (r *MySQLResetTokenRepo) FindByToken(token string) (*models.PasswordResetTo
 		return nil, err
 	}
 
-	// --- 取得されたデータのログ ---
-	log.Println("[FindByToken] Found record:")
-	log.Println("    ID        =", pr.ID)
-	log.Println("    UserID    =", pr.UserID)
-	log.Println("    Token     =", pr.Token)
-	log.Println("    ExpiresAt =", pr.ExpiresAt)
-
 	if usedAt.Valid {
 		pr.UsedAt = &usedAt.Time
 		log.Println("    UsedAt    =", pr.UsedAt)
 	} else {
 		log.Println("    UsedAt    = NULL")
 	}
-
-	log.Println("[FindByToken] END ------------------------------")
 
 	return &pr, nil
 }

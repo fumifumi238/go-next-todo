@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -26,111 +25,37 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-// SetupTestDB はテスト用のデータベース接続を確立し、テーブルを作成し、テストデータを投入します。
-func SetupTestDB(t *testing.T) (*sql.DB, *gin.Engine, *repositories.TodoRepository, *repositories.UserRepository) {
+var testNormalEmail, testAdminEmail string
 
-	dbUser := os.Getenv("TEST_DB_USER")
-	dbPass := os.Getenv("TEST_DB_PASS")
-	dbHost := os.Getenv("TEST_DB_HOST")
-	dbPort := os.Getenv("TEST_DB_PORT")
-	dbName := os.Getenv("TEST_DB_NAME")
+func SetupTestDB(t *testing.T) (*sql.Tx, *gin.Engine, *repositories.TodoRepository, *repositories.UserRepository) {
+    dbUser := os.Getenv("TEST_DB_USER")
+    dbPass := os.Getenv("TEST_DB_PASS")
+    dbHost := os.Getenv("TEST_DB_HOST")
+    dbPort := os.Getenv("TEST_DB_PORT")
+    dbName := os.Getenv("TEST_DB_NAME")
 
-	// In Docker container, use "db" as hostname instead of 127.0.0.1
-	if dbHost == "127.0.0.1" {
-		dbHost = "db"
-	}
+    dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", dbUser, dbPass, dbHost, dbPort, dbName)
+    db, err := sql.Open("mysql", dsn)
+    require.NoError(t, err)
+    require.NoError(t, db.Ping())
 
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", dbUser, dbPass, dbHost, dbPort, dbName)
+    tx, err := db.Begin()
+    require.NoError(t, err)
 
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		t.Fatalf("Failed to open database connection: %v", err)
-	}
-	if err := db.Ping(); err != nil {
-		db.Close()
-		t.Fatalf("Failed to ping database: %v", err)
-	}
+    t.Cleanup(func() {
+        tx.Rollback()
+        db.Close()
+    })
 
-	// 既存のテーブルを削除 (テストのたびにクリーンな状態にするため)
-	// Foreign Key Constraint があるため、todos -> users の順で削除
-	if _, err := db.Exec("SET FOREIGN_KEY_CHECKS=0;"); err != nil {
-		log.Printf("Failed to disable foreign key checks: %v", err)
-	}
-	if _, err := db.Exec("TRUNCATE TABLE todos"); err != nil {
-		log.Printf("Failed to truncate todos table (it might not exist yet): %v", err)
-	}
-	if _, err := db.Exec("TRUNCATE TABLE users"); err != nil {
-		log.Printf("Failed to truncate users table (it might not exist yet): %v", err)
-	}
-	if _, err := db.Exec("SET FOREIGN_KEY_CHECKS=1;"); err != nil {
-		log.Printf("Failed to enable foreign key checks: %v", err)
-	}
+    userRepo := repositories.NewUserRepository(tx)
+    todoRepo := repositories.NewTodoRepository(tx)
 
-	// ユーザーテーブルの作成
-	createUserTableSQL := `
-    	CREATE TABLE IF NOT EXISTS users (
-    		id INT AUTO_INCREMENT PRIMARY KEY,
-    		username VARCHAR(255) NOT NULL UNIQUE,
-    		email VARCHAR(255) NOT NULL UNIQUE,
-    		password_hash VARCHAR(255) NOT NULL,
-    		role ENUM('user', 'admin') NOT NULL DEFAULT 'user',
-    		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    	);`
-	if _, err := db.Exec(createUserTableSQL); err != nil {
-		t.Fatalf("Failed to create users table: %v", err)
-	}
+    router := SetupTestRouter(t, tx)
 
-	// ToDoテーブルの作成
-	createTodoTableSQL := `
-    	CREATE TABLE IF NOT EXISTS todos (
-    		id INT AUTO_INCREMENT PRIMARY KEY,
-    		user_id INT NOT NULL,
-    		title VARCHAR(255) NOT NULL,
-    		completed BOOLEAN NOT NULL DEFAULT FALSE,
-    		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    	);`
-	if _, err := db.Exec(createTodoTableSQL); err != nil {
-		t.Fatalf("Failed to create todos table: %v", err)
-	}
-
-	// テストユーザーの挿入
-	userRepo := repositories.NewUserRepository(db)
-	hashedPasswordUser, _ := repositories.HashPassword("password123")
-	normalUser := models.User{
-		Username:     "normal_user",
-		Email:        "normal_user@example.com",
-		PasswordHash: hashedPasswordUser,
-		Role:         "user",
-	}
-	if _, err := userRepo.Create(&normalUser); err != nil {
-		log.Printf("Failed to create normal_user (might exist, or duplicate entry): %v", err)
-	}
-
-	hashedPasswordAdmin, _ := repositories.HashPassword("adminpass")
-	adminUser := models.User{
-		Username:     "admin_user",
-		Email:        "admin@example.com",
-		PasswordHash: hashedPasswordAdmin,
-		Role:         "admin",
-	}
-	if _, err := userRepo.Create(&adminUser); err != nil {
-		log.Printf("Failed to create admin_user (might exist, or duplicate entry): %v", err)
-	}
-
-	log.Println("Successfully set up test database!")
-
-	// Ginルーターのセットアップ
-	router := SetupTestRouter(t, db) // テスト専用のルーターセットアップ関数
-	todoRepo := repositories.NewTodoRepository(db)
-
-	return db, router, todoRepo, userRepo
+    return tx, router, todoRepo, userRepo
 }
-
 // SetupTestRouter はテスト用のGinルーターとリポジトリをセットアップします。
-func SetupTestRouter(t *testing.T, db *sql.DB) *gin.Engine {
+func SetupTestRouter(t *testing.T, db repositories.DataStore) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	// リポジトリ
 	todoRepo := repositories.NewTodoRepository(db)
@@ -145,7 +70,7 @@ func SetupTestRouter(t *testing.T, db *sql.DB) *gin.Engine {
 	adminOTPService := services.NewAdminOTPService(adminOTPRepo)
 
 	// ハンドラー
-	userHandler := handlers.NewUserHandler(userService, jwtService,adminOTPService)
+	userHandler := handlers.NewUserHandler(userService, jwtService, adminOTPService)
 	todoHandler := handlers.NewTodoHandler(todoService)
 	r := gin.Default()
 
@@ -160,6 +85,8 @@ func SetupTestRouter(t *testing.T, db *sql.DB) *gin.Engine {
 
 	r.POST("/api/register", userHandler.RegisterHandler)
 	r.POST("/api/login", userHandler.LoginHandler)
+	r.POST("/api/forgot-password", userHandler.ForgotPasswordHandler)
+	r.POST("/api/reset-password/:token", userHandler.ResetPasswordHandler)
 
 	authorized := r.Group("/")
 
@@ -221,6 +148,10 @@ func CreateTestTodo(t *testing.T, router *gin.Engine, token, title string, compl
 	err := json.Unmarshal(resp.Body.Bytes(), &createdTodo)
 	require.NoError(t, err)
 	return &createdTodo
+}
+
+func GetTestEmails() (string, string) {
+	return testNormalEmail, testAdminEmail
 }
 
 func LoginAndGetToken(t *testing.T, router *gin.Engine, email, password string) (string, error) {

@@ -152,7 +152,7 @@ func dbCheckHandler(c *gin.Context) {
         c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to open DB connection", "error": err.Error()})
         return
     }
-    defer db.Close()
+
 
     // 2. 接続を検証 (Ping)
     if err := db.Ping(); err != nil {

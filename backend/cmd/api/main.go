@@ -21,7 +21,7 @@ func main() {
 	}
 
 	db := database.InitDB()
-	defer db.Close()
+
 
 	router := routes.SetupRouter(db)
 

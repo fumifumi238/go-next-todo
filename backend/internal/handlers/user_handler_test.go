@@ -29,11 +29,10 @@ func generateResetToken() (string, error) {
 }
 
 func TestRegisterUser_Success(t *testing.T) {
-	db, r, _, _ := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, r, _, _ := testutil.SetupTestDB(t)
 
 	newUserData := map[string]string{
-		"username": "newuser",
+		"username": "newuser123",
 		"email":    "newuser@example.com",
 		"password": "newpassword",
 	}
@@ -51,18 +50,17 @@ func TestRegisterUser_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &responseUser)
 	assert.NoError(t, err, "Response should be a valid JSON user object")
 	assert.NotZero(t, responseUser.ID, "Expected a non-zero User ID")
-	assert.Equal(t, "newuser", responseUser.Username, "Expected username to match")
+	assert.Equal(t, "newuser123", responseUser.Username, "Expected username to match")
 	assert.Equal(t, "newuser@example.com", responseUser.Email, "Expected email to match")
 	assert.Equal(t, "user", responseUser.Role, "Expected default role to be 'user'")
 	assert.Empty(t, responseUser.PasswordHash, "Password hash should not be returned in response")
 }
 
 func TestRegisterUser_InvalidInput(t *testing.T) {
-	db, r, _, _ := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, r, _, _ := testutil.SetupTestDB(t)
 
 	invalidUserData := map[string]string{
-		"username": "invaliduser",
+		"username": "invaliduser123",
 		"email":    "invalid@example.com",
 	}
 	jsonValue, _ := json.Marshal(invalidUserData)
@@ -82,8 +80,7 @@ func TestRegisterUser_InvalidInput(t *testing.T) {
 }
 
 func TestRegisterUser_DuplicateEmail(t *testing.T) {
-	db, r, _, userRepo := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, r, _, userRepo := testutil.SetupTestDB(t)
 
 	existingUser := models.User{
 		Username:     "existing",
@@ -95,7 +92,7 @@ func TestRegisterUser_DuplicateEmail(t *testing.T) {
 	assert.NoError(t, err)
 
 	duplicateUserData := map[string]string{
-		"username": "anotheruser",
+		"username": "anotheruser123",
 		"email":    "duplicate@example.com",
 		"password": "somepassword",
 	}
@@ -115,9 +112,9 @@ func TestRegisterUser_DuplicateEmail(t *testing.T) {
 }
 
 func TestLoginUser_Success(t *testing.T) {
-	db, r, _, _ := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, r, _, userRepo := testutil.SetupTestDB(t)
 
+	testutil.CreateTestUser(t, userRepo, "normal_user", "normal_user@example.com", "password123", "user")
 	loginCredentials := map[string]string{
 		"email":    "normal_user@example.com",
 		"password": "password123",
@@ -141,8 +138,7 @@ func TestLoginUser_Success(t *testing.T) {
 }
 
 func TestLoginUser_InvalidCredentials(t *testing.T) {
-	db, r, _, _ := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, r, _, _ := testutil.SetupTestDB(t)
 
 	loginCredentials := map[string]string{
 		"email":    "nonexistent@example.com",
@@ -164,18 +160,22 @@ func TestLoginUser_InvalidCredentials(t *testing.T) {
 }
 
 func TestResetPassword_Success(t *testing.T) {
-	db, r, _, _ := testutil.SetupTestDB(t)
-	defer db.Close()
+	db, r, _, userRepo := testutil.SetupTestDB(t)
+
+	testutil.CreateTestUser(t, userRepo, "normal_user", "normal_user@example.com", "password123", "user")
+	// Get the user ID
+	user, err := userRepo.FindByEmail("normal_user@example.com")
+	assert.NoError(t, err)
 
 	// トークンを作成
 	resetTokenRepo := repositories.NewMySQLResetTokenRepo(db)
 	token, _ := generateResetToken()
 	resetToken := &models.PasswordResetToken{
-		UserID:    1,
+		UserID:    uint(user.ID),
 		Token:     token,
 		ExpiresAt: time.Now().Add(1 * time.Hour),
 	}
-	err := resetTokenRepo.Save(resetToken)
+	err = resetTokenRepo.Save(resetToken)
 	assert.NoError(t, err)
 
 	resetData := map[string]string{
@@ -197,9 +197,9 @@ func TestResetPassword_Success(t *testing.T) {
 }
 
 func TestForgotPassword_Success(t *testing.T) {
-	db, r, _, _ := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, r, _, userRepo := testutil.SetupTestDB(t)
 
+	testutil.CreateTestUser(t, userRepo, "normal_user", "normal_user@example.com", "password123", "user")
 	forgotData := map[string]string{
 		"email": "normal_user@example.com",
 	}
@@ -219,8 +219,7 @@ func TestForgotPassword_Success(t *testing.T) {
 }
 
 func TestForgotPassword_InvalidEmail(t *testing.T) {
-	db, r, _, _ := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, r, _, _ := testutil.SetupTestDB(t)
 
 	forgotData := map[string]string{
 		"email": "invalid-email",
@@ -241,9 +240,9 @@ func TestForgotPassword_InvalidEmail(t *testing.T) {
 }
 
 func TestFindAllUsers_AdminSuccess(t *testing.T) {
-	db, r, _, _ := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, r, _, userRepo := testutil.SetupTestDB(t)
 
+	testutil.CreateTestUser(t, userRepo, "admin_user", "admin@example.com", "adminpass", "admin")
 	// 管理者トークンを取得
 	token, err := testutil.LoginAndGetToken(t, r, "admin@example.com", "adminpass")
 	assert.NoError(t, err)
@@ -267,9 +266,9 @@ func TestFindAllUsers_AdminSuccess(t *testing.T) {
 }
 
 func TestFindAllUsers_UserForbidden(t *testing.T) {
-	db, r, _, _ := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, r, _, userRepo := testutil.SetupTestDB(t)
 
+	testutil.CreateTestUser(t, userRepo, "normal_user", "normal_user@example.com", "password123", "user")
 	// 通常ユーザートークンを取得
 	token, err := testutil.LoginAndGetToken(t, r, "normal_user@example.com", "password123")
 	assert.NoError(t, err)
@@ -289,8 +288,7 @@ func TestFindAllUsers_UserForbidden(t *testing.T) {
 }
 
 func TestFindAllUsers_Unauthorized(t *testing.T) {
-	db, r, _, _ := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, r, _, _ := testutil.SetupTestDB(t)
 
 	req, _ := http.NewRequest("GET", "/api/admin/users", nil)
 	w := httptest.NewRecorder()

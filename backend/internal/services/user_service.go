@@ -120,7 +120,6 @@ func generateResetToken() (string, error) {
 func (s *UserService) ResetPasswordUser(token, newPassword string) error {
 	// 1. トークンを検証
 	resetToken, err := s.resetTokenRepo.FindByToken(token)
-
 	if err != nil {
 		return fmt.Errorf("invalid or expired token")
 	}
@@ -168,6 +167,8 @@ func (s *UserService) sendPasswordResetEmail(email, resetURL string) error {
 	if smtpPort == "" {
 		smtpPort = "2525"
 	}
+
+
 
 	// 件名と本文
 	message := []byte(fmt.Sprintf(

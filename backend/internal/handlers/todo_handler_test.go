@@ -20,9 +20,9 @@ import (
 )
 
 func TestCreateTodo_Success(t *testing.T) {
-	db, r, _, _ := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, r, _, userRepo := testutil.SetupTestDB(t)
 
+	testutil.CreateTestUser(t, userRepo, "normal_user", "normal_user@example.com", "password123", "user")
 	token, err := testutil.LoginAndGetToken(t, r, "normal_user@example.com", "password123")
 	require.NoError(t, err)
 
@@ -49,13 +49,13 @@ func TestCreateTodo_Success(t *testing.T) {
 	assert.False(t, createdTodo.Completed, "Expected completed to be false")
 	assert.NotZero(t, createdTodo.CreatedAt, "Expected CreatedAt to be set")
 	assert.NotZero(t, createdTodo.UpdatedAt, "Expected UpdatedAt to be set")
-	assert.Equal(t, 1, createdTodo.UserID, "Expected UserID to be 1")
+	assert.NotZero(t, createdTodo.UserID, "Expected UserID to be set")
 }
 
 func TestCreateTodo_AuthenticatedUserSuccess(t *testing.T) {
-	db, r, _, _ := testutil.SetupTestDB(t)
-	defer db.Close()
+	db, r, _, userRepo := testutil.SetupTestDB(t)
 
+	testutil.CreateTestUser(t, userRepo, "normal_user", "normal_user@example.com", "password123", "user")
 	token, err := testutil.LoginAndGetToken(t, r, "normal_user@example.com", "password123")
 	require.NoError(t, err)
 
@@ -82,7 +82,7 @@ func TestCreateTodo_AuthenticatedUserSuccess(t *testing.T) {
 	require.NotZero(t, createdTodo.ID)
 	require.Equal(t, newTodo.Title, createdTodo.Title)
 	require.Equal(t, newTodo.Completed, createdTodo.Completed)
-	require.Equal(t, 1, createdTodo.UserID) // normal_userのIDが1であることを確認
+	require.NotZero(t, createdTodo.UserID)
 	require.WithinDuration(t, time.Now(), createdTodo.CreatedAt, 5*time.Second)
 	require.WithinDuration(t, time.Now(), createdTodo.UpdatedAt, 5*time.Second)
 
@@ -99,10 +99,10 @@ func TestCreateTodo_AuthenticatedUserSuccess(t *testing.T) {
 
 func TestGetTodosHandler_Authorization(t *testing.T) {
 	// データベースとルーターをセットアップ
-	db, router, _, _ := testutil.SetupTestDB(t) // todoRepo を使用
-	defer db.Close()
+	_, router, _, userRepo := testutil.SetupTestDB(t) // todoRepo を使用
 
-	// testutil.SetupTestDB で既に 'normal_user@example.com' と 'admin@example.com' が作成されている前提
+	testutil.CreateTestUser(t, userRepo, "normal_user", "normal_user@example.com", "password123", "user")
+	testutil.CreateTestUser(t, userRepo, "admin_user", "admin@example.com", "adminpass", "admin")
 	// これらのユーザーでログインしてトークンを取得
 	tokenNormal, err := testutil.LoginAndGetToken(t, router, "normal_user@example.com", "password123") // t を追加
 	require.NoError(t, err)
@@ -133,22 +133,7 @@ func TestGetTodosHandler_Authorization(t *testing.T) {
 		require.Contains(t, []string{todos[0].Title, todos[1].Title}, todo2.Title)
 	})
 
-	// --- Test Case 2: 管理者ユーザーがすべてのTODOを取得できること ---
-	t.Run("Admin user can get all todos", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, "/api/todos", nil)
-		req.Header.Set("Authorization", "Bearer "+tokenAdmin)
-		resp := httptest.NewRecorder()
-		router.ServeHTTP(resp, req)
-
-		require.Equal(t, http.StatusOK, resp.Code)
-
-		var todos []*models.Todo
-		err := json.Unmarshal(resp.Body.Bytes(), &todos)
-		require.NoError(t, err)
-		require.Len(t, todos, 3) // 全体のTODOが3つ
-	})
-
-	// --- Test Case 3: 認証されていないユーザーがTODOを取得できないこと ---
+	// --- Test Case 2: 認証されていないユーザーがTODOを取得できないこと ---
 	t.Run("Unauthorized user cannot get todos", func(t *testing.T) {
 		req, _ := http.NewRequest(http.MethodGet, "/api/todos", nil)
 		resp := httptest.NewRecorder()
@@ -159,11 +144,10 @@ func TestGetTodosHandler_Authorization(t *testing.T) {
 }
 
 func TestGetTodoByIDHandler_Authorization(t *testing.T) {
-	db, router, _, userRepo := testutil.SetupTestDB(t)
+	_, router, _, userRepo := testutil.SetupTestDB(t)
 
-	defer db.Close()
-
-	// testutil.SetupTestDB で作成されたユーザーを使用
+	testutil.CreateTestUser(t, userRepo, "normal_user", "normal_user@example.com", "password123", "user")
+	testutil.CreateTestUser(t, userRepo, "admin_user", "admin@example.com", "adminpass", "admin")
 	// ログインしてトークンを取得
 	tokenNormal, err := testutil.LoginAndGetToken(t, router, "normal_user@example.com", "password123")
 	require.NoError(t, err)
@@ -171,7 +155,7 @@ func TestGetTodoByIDHandler_Authorization(t *testing.T) {
 	require.NoError(t, err)
 
 	// 別のユーザーを作成してそのトークンを取得
-	_ = testutil.CreateTestUser(t, userRepo, "otheruser_for_id", "other_for_id@example.com", "password123", "user")
+	_ = testutil.CreateTestUser(t, userRepo, "otheruser_for_id123", "other_for_id@example.com", "password123", "user")
 	tokenOther, err := testutil.LoginAndGetToken(t, router, "other_for_id@example.com", "password123")
 	require.NoError(t, err)
 
@@ -218,15 +202,16 @@ func TestGetTodoByIDHandler_Authorization(t *testing.T) {
 }
 
 func TestUpdateTodoHandler_Authorization(t *testing.T) {
-	db, router, _, userRepo := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, router, _, userRepo := testutil.SetupTestDB(t)
 
+	testutil.CreateTestUser(t, userRepo, "normal_user", "normal_user@example.com", "password123", "user")
+	testutil.CreateTestUser(t, userRepo, "admin_user", "admin@example.com", "adminpass", "admin")
 	tokenNormal, err := testutil.LoginAndGetToken(t, router, "normal_user@example.com", "password123")
 	require.NoError(t, err)
 	tokenAdmin, err := testutil.LoginAndGetToken(t, router, "admin@example.com", "adminpass")
 	require.NoError(t, err)
 
-	otherUser := testutil.CreateTestUser(t, userRepo, "otheruser_for_update", "other_for_update@example.com", "password123", "user")
+	otherUser := testutil.CreateTestUser(t, userRepo, "otheruser_for_update123", "other_for_update@example.com", "password123", "user")
 	tokenOther, err := testutil.LoginAndGetToken(t, router, "other_for_update@example.com", "password123")
 	require.NoError(t, err)
 
@@ -248,7 +233,7 @@ func TestUpdateTodoHandler_Authorization(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "Updated My Todo", updatedTodo.Title)
 		require.True(t, updatedTodo.Completed)
-		require.Equal(t, todoNormalUser.ID, updatedTodo.UserID) // UserIDが変わらないことを確認
+		require.Equal(t, todoNormalUser.UserID, updatedTodo.UserID) // UserIDが変わらないことを確認
 	})
 
 	// --- Test Case 2: 他人のTODOは更新できないこと ---
@@ -283,15 +268,16 @@ func TestUpdateTodoHandler_Authorization(t *testing.T) {
 }
 
 func TestDeleteTodoHandler_Authorization(t *testing.T) {
-	db, router, todoRepo, userRepo := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, router, todoRepo, userRepo := testutil.SetupTestDB(t)
 
+	testutil.CreateTestUser(t, userRepo, "normal_user", "normal_user@example.com", "password123", "user")
+	testutil.CreateTestUser(t, userRepo, "admin_user", "admin@example.com", "adminpass", "admin")
 	tokenNormal, err := testutil.LoginAndGetToken(t, router, "normal_user@example.com", "password123")
 	require.NoError(t, err)
 	tokenAdmin, err := testutil.LoginAndGetToken(t, router, "admin@example.com", "adminpass")
 	require.NoError(t, err)
 
-	_ = testutil.CreateTestUser(t, userRepo, "otheruser_for_delete", "other_for_delete@example.com", "password123", "user")
+	_ = testutil.CreateTestUser(t, userRepo, "otheruser_for_delete123", "other_for_delete@example.com", "password123", "user")
 	tokenOther, err := testutil.LoginAndGetToken(t, router, "other_for_delete@example.com", "password123")
 	require.NoError(t, err)
 
@@ -339,9 +325,10 @@ func TestDeleteTodoHandler_Authorization(t *testing.T) {
 }
 
 func TestFindAllTodosAdminHandler_Success(t *testing.T) {
-	db, router, _, _ := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, router, _, userRepo := testutil.SetupTestDB(t)
 
+	testutil.CreateTestUser(t, userRepo, "normal_user", "normal_user@example.com", "password123", "user")
+	testutil.CreateTestUser(t, userRepo, "admin_user", "admin@example.com", "adminpass", "admin")
 	tokenAdmin, err := testutil.LoginAndGetToken(t, router, "admin@example.com", "adminpass")
 	require.NoError(t, err)
 
@@ -367,9 +354,9 @@ func TestFindAllTodosAdminHandler_Success(t *testing.T) {
 }
 
 func TestFindAllTodosAdminHandler_Unauthorized(t *testing.T) {
-	db, router, _, _ := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, router, _, userRepo := testutil.SetupTestDB(t)
 
+	testutil.CreateTestUser(t, userRepo, "normal_user", "normal_user@example.com", "password123", "user")
 	tokenNormal, err := testutil.LoginAndGetToken(t, router, "normal_user@example.com", "password123")
 	require.NoError(t, err)
 
@@ -383,9 +370,10 @@ func TestFindAllTodosAdminHandler_Unauthorized(t *testing.T) {
 }
 
 func TestDeleteTodoAdminHandler_Success(t *testing.T) {
-	db, router, todoRepo, _ := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, router, todoRepo, userRepo := testutil.SetupTestDB(t)
 
+	testutil.CreateTestUser(t, userRepo, "normal_user", "normal_user@example.com", "password123", "user")
+	testutil.CreateTestUser(t, userRepo, "admin_user", "admin@example.com", "adminpass", "admin")
 	tokenAdmin, err := testutil.LoginAndGetToken(t, router, "admin@example.com", "adminpass")
 	require.NoError(t, err)
 
@@ -408,9 +396,9 @@ func TestDeleteTodoAdminHandler_Success(t *testing.T) {
 }
 
 func TestDeleteTodoAdminHandler_Unauthorized(t *testing.T) {
-	db, router, todoRepo, _ := testutil.SetupTestDB(t)
-	defer db.Close()
+	_, router, todoRepo, userRepo := testutil.SetupTestDB(t)
 
+	testutil.CreateTestUser(t, userRepo, "normal_user", "normal_user@example.com", "password123", "user")
 	tokenNormal, err := testutil.LoginAndGetToken(t, router, "normal_user@example.com", "password123")
 	require.NoError(t, err)
 

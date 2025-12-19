@@ -50,10 +50,7 @@ func (s *AdminOTPService) GenerateOTP() (string, error) {
 	return fmt.Sprintf("%06d", n.Int64()), nil
 }
 
-
-
 func (s *AdminOTPService) SendOTP(email, otp string) error {
-
 	from := os.Getenv("SMTP_FROM")
 	if from == "" {
 		from = "noreply@example.com"
@@ -66,7 +63,6 @@ func (s *AdminOTPService) SendOTP(email, otp string) error {
 	m.SetBody("text/plain", fmt.Sprintf("あなたのOTPコード: %s\n有効期限: 5分", otp))
 
 	err := s.mailer.DialAndSend(m)
-
 	if err != nil {
 		log.Printf("Failed to send OTP email: %v", err)
 		return nil // テスト時は成功扱い

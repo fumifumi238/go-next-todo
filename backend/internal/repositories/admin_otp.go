@@ -10,10 +10,10 @@ import (
 )
 
 type AdminOTPRepository struct {
-	DB *sql.DB
+	DB DataStore
 }
 
-func NewAdminOTPRepository(db *sql.DB) *AdminOTPRepository {
+func NewAdminOTPRepository(db DataStore) *AdminOTPRepository {
 	return &AdminOTPRepository{DB: db}
 }
 

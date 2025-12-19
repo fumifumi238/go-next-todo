@@ -12,11 +12,11 @@ import (
 
 // TodoRepository はデータベース操作を行うための構造体です。
 type TodoRepository struct {
-	DB *sql.DB
+	DB DataStore
 }
 
 // NewTodoRepository は新しいTodoRepositoryインスタンスを作成します。
-func NewTodoRepository(db *sql.DB) *TodoRepository {
+func NewTodoRepository(db DataStore) *TodoRepository {
 	return &TodoRepository{DB: db}
 }
 
@@ -65,7 +65,6 @@ func (r *TodoRepository) FindAll() ([]*models.Todo, error) {
 	for rows.Next() {
 		var t models.Todo
 		err := rows.Scan(&t.ID, &t.UserID, &t.Title, &t.Completed, &t.CreatedAt, &t.UpdatedAt) // 💡 t.UserID, t.UpdatedAt を追加
-
 		if err != nil {
 			log.Printf("Failed to scan todo: %v", err)
 			return nil, fmt.Errorf("could not scan todo: %w", err)

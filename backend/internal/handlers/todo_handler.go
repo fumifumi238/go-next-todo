@@ -245,7 +245,7 @@ func (h *TodoHandler) FindAllTodosAdminHandler(c *gin.Context) {
 		return
 	}
 
-	todos, err := h.todoService.GetTodos(0, userRole) // userIDはadminの場合無視される
+	todos, err := h.todoService.GetAllTodos(userRole)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch todos"})
 		return
